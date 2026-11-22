@@ -1,0 +1,38 @@
+.subscription-main{width:min(1120px,calc(100% - 36px));margin:0 auto;padding:54px 0 80px}
+.subscription-main .section-heading{text-align:center;margin:0 auto 34px}
+.subscription-main .section-heading h1{color:var(--text);font-size:clamp(28px,4vw,42px);margin:10px 0}
+.subscription-main .section-heading p{color:var(--muted);max-width:660px;margin:0 auto}
+.subscription-loading{text-align:center;color:var(--muted)}
+.subscription-plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;align-items:stretch}
+.subscription-plan-grid .price-card{height:100%;display:flex;flex-direction:column}
+.subscription-plan-grid .plan-button{width:100%;justify-content:center}
+.subscription-plan-grid .price-card ul{margin-top:0}
+.subscription-plan-grid .price-card .plan-divider{width:100%}
+.subscription-current,.subscription-notice,.subscription-error,.subscription-history{margin:0 0 20px;padding:18px 20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.subscription-overview-grid{display:grid;grid-template-columns:minmax(260px,.78fr) minmax(0,1.22fr);gap:16px;align-items:start;max-width:1000px;margin:0 auto 20px}
+.subscription-overview-grid.history-only{grid-template-columns:minmax(0,1fr)}
+.subscription-overview-grid .subscription-current,.subscription-overview-grid .subscription-history{max-width:none;height:100%;box-sizing:border-box}
+.subscription-overview-grid .subscription-history{margin:0;min-width:0}
+.subscription-notice,.subscription-error{max-width:850px;margin:0 auto 20px}
+.subscription-current{display:flex;justify-content:space-between;align-items:center}
+.subscription-current h2,.subscription-history h2{color:var(--text);margin:7px 0}
+.subscription-current p{color:var(--muted);margin:0}
+.subscription-status-pill{border-radius:99px;background:rgba(34,197,94,.12);padding:8px 12px;color:#11845b;font-size:12px;font-weight:700}
+.subscription-notice{background:#fff8e6;border-color:#f4d580;color:#805900}
+.subscription-error{background:#fff1f0;border-color:#ffd0cb;color:#b42318}
+.subscription-contact-field{display:grid;gap:7px;max-width:850px;margin:0 auto 20px;color:var(--text);font-size:13px;font-weight:700}
+.subscription-contact-field input{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:11px 12px;background:var(--surface);color:var(--text);font:inherit}
+.subscription-contact-field input:focus{outline:2px solid #13a9b833;border-color:#13a9b8}
+.subscription-contact-field small{color:var(--muted);font-size:11px;font-weight:400}
+.trial-plan-card{border-style:dashed}
+.subscription-history{overflow:hidden}
+.subscription-history-table{overflow:auto}
+.subscription-history table{border-collapse:collapse;width:100%;color:var(--text);font-size:13px}
+.subscription-history th,.subscription-history td{padding:10px;text-align:left;border-bottom:1px solid var(--border)}
+.google-signin-button{display:flex;justify-content:center;margin:16px 0}
+.subscription-embedded .subscription-main{width:100%;padding:0}
+.subscription-embedded .subscription-plan-grid{max-width:680px;margin:0 auto}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:17px 0;color:var(--muted);font-size:12px}
+.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:var(--border)}
+@media(max-width:760px){.subscription-overview-grid{grid-template-columns:1fr}.subscription-overview-grid .subscription-current{max-width:none}}
+@media(max-width:600px){.subscription-main{padding-top:32px}.subscription-current{align-items:flex-start;gap:12px}.subscription-history{padding:14px}}

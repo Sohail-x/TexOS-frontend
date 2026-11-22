@@ -1,0 +1,53 @@
+ .cu-page { color: var(--db-text, #123047); }
+.cu-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin:2px 0 24px; }
+.cu-eyebrow { margin:0 0 8px; color:#0077b6; font-size:9px; font-weight:800; letter-spacing:1.5px; }
+.cu-heading h1 { margin:0; font-size:25px; letter-spacing:-.7px; }
+.cu-subtitle { margin:7px 0 0; color:var(--db-muted,#526b7b); font-size:12px; }
+.cu-refresh { display:flex; align-items:center; gap:8px; min-height:38px; padding:0 13px; border:1px solid var(--db-border,#d7e6e9); border-radius:8px; background:#fff; color:#0077b6; font-weight:700; cursor:pointer; }
+.cu-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:17px; }
+.cu-stat { min-width:0; padding:17px; border:1px solid var(--db-border,#d7e6e9); border-radius:11px; background:#fff; display:grid; grid-template-columns:34px 1fr; column-gap:10px; align-items:center; }
+.cu-stat-icon { grid-row:span 3; width:34px; height:34px; display:grid; place-items:center; border-radius:9px; background:#e0f7fa; color:#0077b6; font-size:18px; font-weight:800; }
+.cu-stat-label { color:var(--db-muted,#526b7b); font-size:10px; }
+.cu-stat strong { margin-top:3px; font-size:21px; letter-spacing:-.4px; }
+.cu-stat small { margin-top:3px; color:var(--db-subtle,#6b8290); font-size:9px; }
+.cu-panel { min-width:0; padding:20px; border:1px solid var(--db-border,#d7e6e9); border-radius:12px; background:#fff; }
+.cu-panel-head { display:flex; justify-content:space-between; align-items:center; gap:15px; margin-bottom:17px; }
+.cu-panel-head h2 { margin:0; font-size:14px; }
+.cu-panel-head p { margin:5px 0 0; color:var(--db-subtle,#6b8290); font-size:10px; }
+.cu-search { width:min(330px,100%); min-height:38px; padding:0 11px; display:flex; align-items:center; gap:8px; border:1px solid var(--db-border,#d7e6e9); border-radius:8px; color:#0077b6; }
+.cu-search input { width:100%; min-width:0; border:0; outline:0; background:transparent; color:var(--db-text,#123047); font:inherit; font-size:11px; }
+.cu-table-wrap { width:100%; overflow-x:auto; }
+.cu-table { width:100%; border-collapse:collapse; text-align:left; white-space:nowrap; }
+.cu-table th { padding:0 11px 12px; color:var(--db-subtle,#6b8290); font-size:8px; letter-spacing:.7px; }
+.cu-table td { padding:12px 11px; border-top:1px solid var(--db-border,#d7e6e9); color:var(--db-muted,#526b7b); font-size:10px; }
+.cu-person { display:flex; align-items:center; gap:9px; }
+.cu-person strong { color:var(--db-text,#123047); font-size:10px; }
+.cu-avatar { width:29px; height:29px; display:grid; place-items:center; border-radius:50%; background:#e0f7fa; color:#0077b6; font-size:9px; font-weight:800; }
+.cu-spend { color:var(--db-text,#123047)!important; font-weight:700; }
+.cu-view { padding:5px 0; border:0; background:transparent; color:#0077b6; font-size:9px; font-weight:700; cursor:pointer; }
+.cu-state { padding:28px 12px; color:var(--db-muted,#526b7b); text-align:center; font-size:11px; line-height:1.6; }
+.cu-alert { margin-bottom:14px; padding:12px 14px; border:1px solid #fecaca; border-radius:8px; background:#fff1f0; color:#b42318; font-size:11px; line-height:1.5; }
+.cu-modal-backdrop { position:fixed; inset:0; z-index:60; padding:24px; display:grid; place-items:center; background:rgba(18,48,71,.38); }
+.cu-modal { width:min(720px,100%); max-height:min(85vh,850px); overflow:auto; padding:22px; border:1px solid var(--db-border,#d7e6e9); border-radius:14px; background:#fff; box-shadow:0 20px 70px rgba(18,48,71,.2); }
+.cu-modal-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+.cu-modal-head h2 { margin:0; font-size:20px; }
+.cu-close { width:32px; height:32px; border:1px solid var(--db-border,#d7e6e9); border-radius:8px; background:#fff; color:var(--db-muted,#526b7b); font-size:22px; cursor:pointer; }
+.cu-profile-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.cu-profile-grid > div { min-width:0; padding:12px; border:1px solid var(--db-border,#d7e6e9); border-radius:8px; display:flex; flex-direction:column; gap:6px; }
+.cu-profile-grid small,.cu-history-row small { color:var(--db-subtle,#6b8290); font-size:9px; }
+.cu-profile-grid strong { overflow-wrap:anywhere; color:var(--db-text,#123047); font-size:11px; }
+.cu-history-head { display:flex; align-items:center; justify-content:space-between; margin:22px 0 10px; }
+.cu-history-head h3 { margin:0; font-size:13px; }
+.cu-history-head span { color:var(--db-subtle,#6b8290); font-size:10px; }
+.cu-history-row { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:15px; padding:12px 2px; border-top:1px solid var(--db-border,#d7e6e9); color:var(--db-text,#123047); font-size:10px; }
+.cu-history-row > div { display:flex; flex-direction:column; gap:4px; }
+.cu-order-status { padding:4px 7px; border-radius:20px; background:#e0f7fa; color:#0077b6; font-size:9px; }
+@media(max-width:800px) { .cu-stats { grid-template-columns:1fr 1fr; } .cu-panel-head { align-items:flex-start; flex-direction:column; } .cu-search { width:100%; } }
+@media(max-width:560px) { .cu-heading { align-items:flex-start; flex-direction:column; } .cu-stats { grid-template-columns:1fr; } .cu-panel { padding:14px; } .cu-profile-grid { grid-template-columns:1fr 1fr; } .cu-modal-backdrop { padding:10px; } .cu-modal { padding:16px; } .cu-history-row { grid-template-columns:1fr auto; } .cu-history-row > strong { grid-column:2; } }
+
+.texos-dashboard[data-theme="dark"] .cu-modal { background:#17313f; border-color:#284858; color:#e8f3f6; }
+.texos-dashboard[data-theme="dark"] .cu-profile-grid > div { background:#102a37; border-color:#284858; }
+.texos-dashboard[data-theme="dark"] .cu-close { background:#102a37; border-color:#315767; color:#d4e4e9; }
+.texos-dashboard[data-theme="dark"] .cu-history-row { border-color:#284858; }
+.texos-dashboard[data-theme="dark"] .cu-order-status { background:#153c49; color:#64d9ef; }
+.texos-dashboard[data-theme="dark"] .cu-modal .cu-alert { background:#3a2024; border-color:#784149; color:#ffb4ad; }
