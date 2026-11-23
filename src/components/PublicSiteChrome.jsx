@@ -57,8 +57,7 @@ export function PublicSiteHeader({ theme, onToggleTheme }) {
 
   {isHome ? (
     <a
-      href="https://mail.google.com/mail/?view=cm&fs=1&to=texosservice%40gmail.com"
-      target="_blank"
+      href={import.meta.env.VITE_CUSTOMER_BASE_URL}
       rel="noreferrer"
     >
       Need Help?
