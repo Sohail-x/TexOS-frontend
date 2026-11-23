@@ -384,7 +384,7 @@ export function ContactPage() {
       if (!response.ok) {
         throw new Error(result.message || result.detail || "Your message could not be delivered. Please try again later.");
       }
-      setFeedback("Thank you for contacting TexOS! We have received your message and will get back to you soon.");
+      setFeedback("Thank you for contacting TexOS! We have received your message and will get back to you soon." || result.message);
       setFeedbackState("success");
       form.reset();
     } catch (error) {
