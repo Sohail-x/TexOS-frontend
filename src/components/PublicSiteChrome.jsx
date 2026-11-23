@@ -56,10 +56,7 @@ export function PublicSiteHeader({ theme, onToggleTheme }) {
   })}
 
   {isHome ? (
-    <a
-      href={import.meta.env.VITE_CUSTOMER_BASE_URL}
-      rel="noreferrer"
-    >
+    <a href={`${import.meta.env.VITE_CUSTOMER_BASE_URL}/contact`}>
       Need Help?
     </a>
   ) : (
