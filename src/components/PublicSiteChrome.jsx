@@ -79,7 +79,8 @@ export function PublicSiteFooter() {
             <span>Tex<span className="brand-highlight">OS</span></span>
           </Link>
           <p>One Platform. Every Restaurant Operation.</p>
-            <p className="made-by">Made with <span>❤</span> by Md Sohail.</p>
+            <p className="made-by">Made with <span>❤</span> by Md Faiyaz.</p>
+            <p className="made-by">My/Our Email <span>:</span> texosservice@gmail.com</p>
         </div>
         <div className="footer-groups">
           {footerGroups.map((group) => (
