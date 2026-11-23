@@ -60,7 +60,7 @@ export default function ForgotPassword() {
               <h3>Check your email</h3>
               <p>
                 If an account exists for {email.trim()}, a password reset link has been sent.
-                The link expires in 30 minutes.
+                Didn't receive the email? Please check your Spam or Junk folder.
               </p>
               <button
                 className="button auth-submit"
