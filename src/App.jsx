@@ -106,6 +106,33 @@ function LandingPage() {
   const [plans, setPlans] = useState([]);
   const [plansError, setPlansError] = useState("");
   const expiredMessage = new URLSearchParams(location.search).get("subscription") === "expired";
+
+
+useEffect(() => {
+  if (!location.hash) return;
+
+  const scrollToSection = () => {
+    const sectionId = decodeURIComponent(
+      location.hash.substring(1)
+    );
+
+    const section = document.getElementById(sectionId);
+
+    if (section) {
+      section.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  };
+
+  requestAnimationFrame(scrollToSection);
+
+}, [location.pathname, location.hash]);
+
+
+
+
   useEffect(() => {
     let active = true;
     fetch(`${API_BASE}/api/subscriptions/plans`)
@@ -298,8 +325,8 @@ function LandingPage() {
                 <p className="included-label">WHAT'S INCLUDED</p>
                 <ul>
                   {(plan.trialPlan
-                    ? ['Full TexOS access for 30 days', 'No payment required to start', 'One trial per restaurant']
-                    : planFeatures[plan.name] || ['Full TexOS access for 30 days', 'Digital Menu QR' , 'Restaurant dashboard', 'Menu and order management', 'Digital billing', 'WhatsApp & Email Support']).map((item) => (
+                    ? ['Full TexOS access for 30 days','Digital Menu QR', 'Restaurant dashboard', 'Menu and order management', 'Digital billing', 'Kitchen Staff Page', 'Order Approval Staff Page', 'No payment required to start', 'One trial per restaurant']
+                    : planFeatures[plan.name] || ['Full TexOS access for 30 days', 'Digital Menu QR' , 'Restaurant dashboard', 'Menu and order management', 'Digital billing', 'Kitchen Staff Page', 'Order Approval Staff Page', 'WhatsApp & Email Support']).map((item) => (
                     <li key={item}><span>✓</span> {item}</li>
                   ))}
                 </ul>

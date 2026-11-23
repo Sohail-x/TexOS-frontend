@@ -713,7 +713,6 @@
 .price-card ul {
   display: flex;
   flex-direction: column;
-  gap: 15px;
   padding: 0;
   list-style: none;
 }
@@ -1307,4 +1306,14 @@
     max-width: 320px;
     margin: 0 auto 28px;
   }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+#features,
+#how-it-works,
+#pricing {
+  scroll-margin-top: 90px;
 }

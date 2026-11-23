@@ -42,14 +42,32 @@ export function PublicSiteHeader({ theme, onToggleTheme }) {
         <span className="brand-icon">T</span>
         <span>Tex<span className="brand-highlight">OS</span></span>
       </Link>
-      <nav className="nav-links" aria-label="Main navigation">
-        <Link to={homeLink("#features")}>Features</Link>
-        <Link to={homeLink("#how-it-works")}>How it works</Link>
-        <Link to={homeLink("#pricing")}>Pricing</Link>
-        {isHome
-          ? <a href="https://mail.google.com/mail/?view=cm&fs=1&to=texosservice%40gmail.com" target="_blank" rel="noreferrer" aria-label="Need help? Email TexOS support">Need Help?</a>
-          : <Link to="/support">Need Help?</Link>}
-      </nav>
+      
+<nav className="nav-links" aria-label="Main navigation">
+  {["Features", "How it works", "Pricing"].map((label, index) => {
+    const hashes = ["#features", "#how-it-works", "#pricing"];
+    const hash = hashes[index];
+
+    return isHome ? (
+      <a href={hash} key={hash}>{label}</a>
+    ) : (
+      <Link to={`/${hash}`} key={hash}>{label}</Link>
+    );
+  })}
+
+  {isHome ? (
+    <a
+      href="https://mail.google.com/mail/?view=cm&fs=1&to=texosservice%40gmail.com"
+      target="_blank"
+      rel="noreferrer"
+    >
+      Need Help?
+    </a>
+  ) : (
+    <Link to="/support">Need Help?</Link>
+  )}
+</nav>
+
       <div className="nav-actions">
         <button
           type="button"
