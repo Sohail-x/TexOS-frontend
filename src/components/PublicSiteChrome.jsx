@@ -64,7 +64,7 @@ export function PublicSiteHeader({ theme, onToggleTheme }) {
       Need Help?
     </a>
   ) : (
-    <Link to="/support">Need Help?</Link>
+    <Link to="/contact">Need Help?</Link>
   )}
 </nav>
 
