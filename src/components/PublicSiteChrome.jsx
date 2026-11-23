@@ -56,7 +56,7 @@ export function PublicSiteHeader({ theme, onToggleTheme }) {
   })}
 
   {isHome ? (
-    <a href={`${import.meta.env.VITE_CUSTOMER_BASE_URL}/contact`}>
+    <a href={`${import.meta.env.VITE_CUSTOMER_BASE_URL.replace(/\/+$/, "")}/contact`}>
       Need Help?
     </a>
   ) : (
