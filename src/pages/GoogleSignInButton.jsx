@@ -33,7 +33,7 @@ export default function GoogleSignInButton({ onSuccess, onError }) {
         },
       });
       window.google.accounts.id.renderButton(buttonRef.current, {
-        theme: "outline",
+        theme: "filled_black",
         size: "large",
         shape: "rectangular",
         text: "continue_with",

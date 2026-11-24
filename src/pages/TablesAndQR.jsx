@@ -38,7 +38,7 @@ function qrImageSource(table) {
   return "";
 }
 
-function TableCard({ table, onToggle, onSelect }) {
+function TableCard({ table, onSelect, onDelete, deleting }) {
   const image = qrImageSource(table);
   const active = table.active !== false;
   return (
@@ -53,7 +53,7 @@ function TableCard({ table, onToggle, onSelect }) {
       <div className="tqr-token"><span>QR TOKEN</span><code>{table.qrToken || "Not returned by API"}</code></div>
       <div className="tqr-card-actions">
         <button type="button" className="tqr-btn tqr-btn-light" onClick={() => onSelect(table)}>View details</button>
-        <button type="button" className="tqr-btn tqr-btn-light" onClick={() => onToggle(table)}>{active ? "Deactivate" : "Activate"}</button>
+        <button type="button" className="tqr-btn tqr-btn-danger" onClick={() => onDelete(table)} disabled={deleting}>{deleting ? "Deleting…" : "Delete"}</button>
       </div>
     </article>
   );
@@ -68,6 +68,7 @@ export default function TablesAndQR() {
   const [notice, setNotice] = useState("");
   const [tableNumber, setTableNumber] = useState("");
   const [selectedTable, setSelectedTable] = useState(null);
+  const [deletingTableId, setDeletingTableId] = useState(null);
 
   const loadTables = useCallback(async () => {
     setLoading(true); setError("");
@@ -123,6 +124,25 @@ export default function TablesAndQR() {
     } catch (err) { setError(err.message || "Could not update table status."); }
   }
 
+  async function deleteTable(table) {
+    const tableName = table.tableNumber || `Table ${table.id}`;
+    if (!window.confirm(`Permanently delete ${tableName} and its QR code? Existing order, payment, or service history will prevent deletion.`)) return;
+
+    setDeletingTableId(table.id);
+    setError("");
+    setNotice("");
+    try {
+      await api(`/api/restaurants/${requireRestaurantId(restaurantId)}/tables/${table.id}`, { method: "DELETE" });
+      setSelectedTable((current) => current?.id === table.id ? null : current);
+      setNotice(`${tableName} and its QR code were deleted.`);
+      await loadTables();
+    } catch (err) {
+      setError(err.message || "Could not delete table.");
+    } finally {
+      setDeletingTableId(null);
+    }
+  }
+
   async function copyCustomerLink(table) {
     const link = `${CUSTOMER_BASE}/menu/${table.qrToken}`;
     try {
@@ -174,8 +194,8 @@ export default function TablesAndQR() {
         <button className="tqr-btn tqr-btn-primary" disabled={saving}>{saving ? "Creating..." : "+ Create table"}</button>
       </form>
 
-      <div className="tqr-list-heading"><div><h2>Your tables</h2><p>QR tokens stay the same when a table is deactivated or reactivated.</p></div><span>{tables.length} TABLES</span></div>
-      {loading ? <div className="tqr-empty">Loading restaurant tables...</div> : tables.length === 0 ? <div className="tqr-empty"><strong>No tables created yet</strong><span>Create your first table to generate its permanent QR token.</span></div> : <div className="tqr-grid">{tables.map((table) => <TableCard key={table.id} table={table} onToggle={toggleTable} onSelect={setSelectedTable} />)}</div>}
+      <div className="tqr-list-heading"><div><h2>Your tables</h2><p>QR tokens stay the same when a table is deactivated or reactivated. Tables with existing activity cannot be deleted.</p></div><span>{tables.length} TABLES</span></div>
+      {loading ? <div className="tqr-empty">Loading restaurant tables...</div> : tables.length === 0 ? <div className="tqr-empty"><strong>No tables created yet</strong><span>Create your first table to generate its permanent QR token.</span></div> : <div className="tqr-grid">{tables.map((table) => <TableCard key={table.id} table={table} onSelect={setSelectedTable} onDelete={deleteTable} deleting={deletingTableId === table.id} />)}</div>}
 
       {selectedTable && <div className="tqr-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTable(null); }}>
         <section className="tqr-modal" role="dialog" aria-modal="true" aria-label="Table details">

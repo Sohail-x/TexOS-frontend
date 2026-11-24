@@ -46,6 +46,8 @@ export default function BillingManagement() {
   const [dateFilter, setDateFilter] = useState("LAST_7_DAYS");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
+  const [activeView, setActiveView] = useState("orders");
+  const [activeEditor, setActiveEditor] = useState("");
   const [selectedBill, setSelectedBill] = useState(null);
   const [billLoading, setBillLoading] = useState(false);
   const [billError, setBillError] = useState("");
@@ -66,7 +68,11 @@ export default function BillingManagement() {
   });
   const [phonePeLoading, setPhonePeLoading] = useState(true);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [receiptPaperSize, setReceiptPaperSize] = useState("80mm");
+  const [billPaperSize, setBillPaperSize] = useState("80mm");
+  const [billPaperSizes, setBillPaperSizes] = useState({});
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -127,6 +133,7 @@ export default function BillingManagement() {
 
   const loadPaymentHistory = useCallback(async () => {
     if (!restaurantId) return;
+    setPaymentHistoryLoading(true);
     try {
       const response = await apiFetch(`${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/payments`, {
         headers: { Accept: "application/json" },
@@ -135,6 +142,8 @@ export default function BillingManagement() {
       setPaymentHistory(listFrom(await response.json()));
     } catch (err) {
       setError(err.message || "Could not load payment history.");
+    } finally {
+      setPaymentHistoryLoading(false);
     }
   }, [restaurantId]);
 
@@ -147,6 +156,7 @@ export default function BillingManagement() {
         setLoading(false);
         setSettingsLoading(false);
         setPhonePeLoading(false);
+        setPaymentHistoryLoading(false);
         return;
       }
       loadOrders();
@@ -186,6 +196,7 @@ export default function BillingManagement() {
   }), [orders, search, dateFilter, customStartDate, customEndDate]);
 
   const openBill = async (order) => {
+    setBillPaperSize(billPaperSizes[order.id] || "80mm");
     setSelectedBill(null);
     setSelectedReceipt(null);
     setBillError("");
@@ -251,6 +262,7 @@ export default function BillingManagement() {
       setNotice(result.onlinePaymentsEnabled
         ? "PhonePe merchant settings saved."
         : "Credentials saved securely. Customer online payments remain disabled until the TexOS provider feature gate is approved.");
+      setActiveEditor("");
     } catch (err) {
       setError(err.message || "Could not save PhonePe settings.");
     } finally {
@@ -338,6 +350,7 @@ export default function BillingManagement() {
       }
       setNotice("Billing settings saved successfully. New bills will use these settings.");
       await Promise.all([loadSettings(), loadOrders()]);
+      setActiveEditor("");
     } catch (err) {
       setError(err.message || "Could not save billing settings.");
     } finally {
@@ -345,79 +358,139 @@ export default function BillingManagement() {
     }
   };
 
-  const printBill = () => {
+  const printBill = (paperSize = receiptPaperSize) => {
+    const receipt = document.querySelector(".bill-modal .bill-print-area");
+    if (!receipt) return;
+
     const previousTitle = document.title;
-    document.title = `${selectedReceipt?.restaurantName || selectedBill?.restaurantName || "Restaurant"} Receipt`;
-    const restoreTitle = () => {
+    const paper = paperSize;
+    const printStyleId = "texos-receipt-print-page";
+    const printRoot = document.createElement("div");
+    const contentWidthMm = paper === "58mm" ? 50 : paper === "A4" ? 194 : 72;
+    const documentName = selectedReceipt ? "Receipt" : "Bill";
+    document.title = `${selectedReceipt?.restaurantName || selectedBill?.restaurantName || "Restaurant"} ${documentName}`;
+    document.body.dataset.texosPrint = paper;
+    receipt.style.width = `${contentWidthMm}mm`;
+    receipt.style.maxWidth = `${contentWidthMm}mm`;
+    printRoot.className = "bill-print-root";
+    printRoot.appendChild(receipt.cloneNode(true));
+    document.body.appendChild(printRoot);
+
+    const cleanup = () => {
+      document.body.removeAttribute("data-texos-print");
+      receipt.style.removeProperty("width");
+      receipt.style.removeProperty("max-width");
+      printRoot.remove();
+      document.getElementById(printStyleId)?.remove();
       document.title = previousTitle;
-      window.removeEventListener("afterprint", restoreTitle);
+      window.removeEventListener("afterprint", cleanup);
     };
-    window.addEventListener("afterprint", restoreTitle);
-    window.print();
+
+    // Measure after the receipt has reflowed at the selected paper width.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const widthMm = paper === "58mm" ? 58 : paper === "A4" ? 210 : 80;
+      const heightPx = Math.ceil(receipt.scrollHeight + 32);
+      const scale = paper === "A4" ? Math.min(1, 1058 / heightPx) : 1;
+      const pageHeight = paper === "A4" ? "297mm" : `${Math.max(100, Math.ceil(heightPx * scale))}px`;
+
+      document.getElementById(printStyleId)?.remove();
+      const style = document.createElement("style");
+      style.id = printStyleId;
+      style.textContent = `
+        @page { size: ${paper === "A4" ? "A4 portrait" : `${widthMm}mm ${pageHeight}`}; margin: 0; }
+        @media print {
+          .bill-print-root { display: block !important; width: 100% !important; }
+          .bill-print-area {
+            width: ${contentWidthMm}mm !important;
+            max-width: ${contentWidthMm}mm !important;
+            box-sizing: border-box !important;
+            margin: 0 auto !important;
+            transform: scale(${scale}) !important;
+            transform-origin: top center !important;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+      window.addEventListener("afterprint", cleanup, { once: true });
+      window.print();
+    }));
   };
   const billItems = selectedBill?.items || selectedBill?.orderItems || selectedBill?.order?.items || [];
-  const downloadReceipt = () => {
-    if (!selectedReceipt) return;
-    const lines = [
-      selectedReceipt.restaurantName,
-      selectedReceipt.restaurantAddress || "",
-      selectedReceipt.restaurantPhone || "",
-      `Receipt: ${selectedReceipt.receiptNumber}`,
-      `Date: ${formatDate(selectedReceipt.paymentDate)}`,
-      `Customer: ${selectedReceipt.customerName || "Guest"}`,
-      `Orders: ${(selectedReceipt.orderNumbers || []).join(", ")}`,
-      `Bills: ${(selectedReceipt.billNumbers || []).join(", ")}`,
-      `Table: ${selectedReceipt.tableNumber || "—"}`,
-      "",
-      ...(selectedReceipt.items || []).map((item) =>
-        `${item.quantity} x ${item.name}  ${money(item.lineTotal)}${item.customization ? `\n  Request: ${item.customization}` : ""}`),
-      "",
-      `Payment method: ${selectedReceipt.paymentMethod || "—"}`,
-      `Payment reference: ${selectedReceipt.paymentReference || "—"}`,
-      `Payment status: ${selectedReceipt.paymentStatus}`,
-      `Total: ${money(selectedReceipt.totalAmount)}`,
-    ].filter((line) => line !== undefined);
-    const url = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/plain;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${selectedReceipt.receiptNumber || "TexOS-receipt"}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+
 
   return (
     <section className="bill-page">
-      <div className="bill-heading"><div><p className="bill-eyebrow">RESTAURANT FINANCE</p><h1>Billing Management</h1><p>Review order bills and configure tax and service charges.</p></div><div className="bill-heading-actions"><button type="button" className="bill-refresh" onClick={() => document.getElementById("phonepe-settings")?.scrollIntoView({ behavior: "smooth", block: "start" })}>PhonePe setup</button><select className="bill-date-select" aria-label="Filter billing records by date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}><option value="LAST_7_DAYS">Last 7 days</option><option value="ALL">All dates</option><option value="TODAY">Today</option><option value="LAST_15_DAYS">Last 15 days</option><option value="LAST_MONTH">Last month</option><option value="CUSTOM">Custom dates</option></select>{dateFilter === "CUSTOM" && <div className="bill-custom-dates bill-heading-custom-dates"><label>From<input type="date" value={customStartDate} onChange={(event) => setCustomStartDate(event.target.value)} /></label><label>To<input type="date" min={customStartDate || undefined} value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} /></label></div>}<button className="bill-refresh" onClick={loadOrders} disabled={loading}>↻ Refresh</button></div></div>
+      <div className="bill-heading">
+        <div>
+          <p className="bill-eyebrow">RESTAURANT FINANCE</p>
+          <h1>Billing Management</h1>
+          <p>Review order bills and configure tax and service charges.</p>
+        </div>
+        <div className="bill-heading-actions">
+          <div className="bill-section-tabs" aria-label="Billing section">
+            <button type="button" className={activeView === "orders" ? "is-active" : ""} aria-pressed={activeView === "orders"} onClick={() => { setActiveEditor(""); setActiveView("orders"); }}>Order Bill</button>
+            <button type="button" className={activeView === "payments" ? "is-active" : ""} aria-pressed={activeView === "payments"} onClick={() => { setActiveEditor(""); setActiveView("payments"); }}>Payment History</button>
+          </div>
+          {activeView === "orders" ? <>
+            <select className="bill-date-select" aria-label="Filter billing records by date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
+              <option value="LAST_7_DAYS">Last 7 days</option>
+              <option value="ALL">All dates</option>
+              <option value="TODAY">Today</option>
+              <option value="LAST_15_DAYS">Last 15 days</option>
+              <option value="LAST_MONTH">Last month</option>
+              <option value="CUSTOM">Custom dates</option>
+            </select>
+            {dateFilter === "CUSTOM" && <div className="bill-custom-dates bill-heading-custom-dates">
+              <label>From<input type="date" value={customStartDate} onChange={(event) => setCustomStartDate(event.target.value)} /></label>
+              <label>To<input type="date" min={customStartDate || undefined} value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} /></label>
+            </div>}
+            <button type="button" className="bill-refresh" onClick={loadOrders} disabled={loading}>↻ Refresh</button>
+          </> : <button type="button" className="bill-refresh" onClick={loadPaymentHistory} disabled={paymentHistoryLoading}>↻ Refresh</button>}
+        </div>
+      </div>
       {error && <div className="bill-alert bill-alert-error" role="alert">{error}</div>}
       {notice && <div className="bill-alert bill-alert-success" role="status">{notice}</div>}
 
-      <div className="bill-layout">
-        <div className="bill-settings-stack">
+      <div className="bill-settings-grid">
         <section className="bill-card bill-settings-card">
-          <div className="bill-card-heading"><div><h2>Billing settings</h2><p>Applied when new bills are generated.</p></div><span className="bill-tag">Restaurant-wide</span></div>
-          <form onSubmit={saveSettings} className="bill-settings-form">
-            {settingsLoading && <p className="bill-form-note">Loading saved billing settings…</p>}
+          <div className="bill-card-heading">
+            <div>
+              <h2>Billing settings</h2>
+              <p>Applied when new bills are generated.</p>
+            </div>
+            <button type="button" className="bill-view-button bill-settings-edit" aria-expanded={activeEditor === "billing"} onClick={() => setActiveEditor((current) => current === "billing" ? "" : "billing")} disabled={settingsLoading}>
+              {activeEditor === "billing" ? "Close" : "Edit Bill Settings"}
+            </button>
+          </div>
+          {activeEditor === "billing" ? <form onSubmit={saveSettings} className="bill-settings-form">
             <label>Menu price tax mode
-              <select value={settings.menuPriceTaxMode} onChange={(e) => setSettings((s) => ({ ...s, menuPriceTaxMode: e.target.value }))}>
+              <select value={settings.menuPriceTaxMode} onChange={(event) => setSettings((current) => ({ ...current, menuPriceTaxMode: event.target.value }))}>
                 <option value="INCLUSIVE">Tax inclusive</option><option value="EXCLUSIVE">Tax exclusive</option>
               </select>
             </label>
             <label>Tax rate (%)
-              <input type="number" min="0" max="100" step="0.01" value={settings.taxRate} onChange={(e) => setSettings((s) => ({ ...s, taxRate: e.target.value }))}/>
+              <input type="number" min="0" max="100" step="0.01" value={settings.taxRate} onChange={(event) => setSettings((current) => ({ ...current, taxRate: event.target.value }))} />
             </label>
-            <label className="bill-toggle-row"><span><strong>Service charge</strong><small>Apply a service charge to the menu subtotal.</small></span><input type="checkbox" checked={settings.serviceChargeEnabled} onChange={(e) => setSettings((s) => ({ ...s, serviceChargeEnabled: e.target.checked }))}/></label>
+            <label className="bill-toggle-row"><span><strong>Service charge</strong><small>Apply a service charge to the menu subtotal.</small></span><input type="checkbox" checked={settings.serviceChargeEnabled} onChange={(event) => setSettings((current) => ({ ...current, serviceChargeEnabled: event.target.checked }))} /></label>
             <label>Service charge rate (%)
-              <input type="number" min="0" max="100" step="0.01" disabled={!settings.serviceChargeEnabled} value={settings.serviceChargeRate} onChange={(e) => setSettings((s) => ({ ...s, serviceChargeRate: e.target.value }))}/>
+              <input type="number" min="0" max="100" step="0.01" disabled={!settings.serviceChargeEnabled} value={settings.serviceChargeRate} onChange={(event) => setSettings((current) => ({ ...current, serviceChargeRate: event.target.value }))} />
             </label>
             <p className="bill-form-note">Saved settings are loaded from your restaurant account. Changes apply to newly generated bills.</p>
-            <button className="bill-primary" type="submit" disabled={saving || settingsLoading}>{saving ? "Saving…" : settingsLoading ? "Loading settings…" : "Save billing settings"}</button>
-          </form>
+            <button className="bill-primary" type="submit" disabled={saving || settingsLoading}>{saving ? "Saving…" : "Save billing settings"}</button>
+          </form> : <p className="bill-settings-summary">{settingsLoading ? "Loading saved billing settings…" : `${settings.menuPriceTaxMode === "INCLUSIVE" ? "Tax inclusive" : "Tax exclusive"} · Tax ${settings.taxRate}% · Service charge ${settings.serviceChargeEnabled ? `${settings.serviceChargeRate}%` : "off"}`}</p>}
         </section>
 
-        <section id="phonepe-settings" className="bill-card bill-settings-card bill-phonepe-settings-card">
-          <div className="bill-card-heading"><div><h2>PhonePe merchant account</h2><p>Configure this restaurant's approved PhonePe merchant account.</p></div><span className="bill-tag">{phonePeSettings.onlinePaymentsEnabled ? "Online enabled" : "Disabled"}</span></div>
-          <form onSubmit={savePhonePeSettings} className="bill-settings-form">
-            {phonePeLoading && <p className="bill-form-note">Loading saved PhonePe configuration…</p>}
+        <section className="bill-card bill-settings-card bill-phonepe-settings-card">
+          <div className="bill-card-heading">
+            <div>
+              <h2>PhonePe merchant account</h2>
+              <p>Configure this restaurant's approved PhonePe merchant account.</p>
+            </div>
+            <button type="button" className="bill-view-button bill-settings-edit" aria-expanded={activeEditor === "phonepe"} onClick={() => setActiveEditor((current) => current === "phonepe" ? "" : "phonepe")} disabled={phonePeLoading}>
+              {activeEditor === "phonepe" ? "Close" : "Edit Merchant Account"}
+            </button>
+          </div>
+          {activeEditor === "phonepe" ? <form onSubmit={savePhonePeSettings} className="bill-settings-form">
             <label>Merchant ID
               <input required value={phonePeSettings.merchantId} onChange={(event) => setPhonePeSettings((current) => ({ ...current, merchantId: event.target.value }))} autoComplete="off" />
             </label>
@@ -447,29 +520,56 @@ export default function BillingManagement() {
             </p>
             {phonePeSettings.partnerIntegrationEnabled && <p className="bill-form-note">PhonePe Partner Integration is active; confirm the restaurant's Merchant ID is provisioned for TexOS.</p>}
             <button className="bill-primary" type="submit" disabled={saving || phonePeLoading}>{saving ? "Saving…" : "Save PhonePe settings"}</button>
-          </form>
-        </section>
-        </div>
-
-        <section className="bill-card bill-orders-card">
-          <div className="bill-card-heading"><div><h2>Order bills</h2><p>Orders from the same table sitting are combined into one bill. All related order IDs appear on the bill.</p></div><span className="bill-count">{filteredOrders.length} of {orders.length} orders</span></div>
-          <div className="bill-search"><span>⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order, table or payment status…"/></div>
-          {loading ? <div className="bill-empty">Loading billing records…</div> : filteredOrders.length === 0 ? <div className="bill-empty">No matching orders found.</div> : (
-            <div className="bill-table-wrap"><table className="bill-table"><thead><tr><th>ORDER</th><th>TABLE</th><th>AMOUNT</th><th>PAYMENT</th><th>DATE</th><th>ACTIONS</th></tr></thead><tbody>
-              {filteredOrders.map((order) => <tr key={order.id || order.orderNumber}><td><strong>{shortOrderId(order.orderNumber, order.id)}</strong></td><td>{order.tableNumber || order.table?.tableNumber || "—"}</td><td>{money(order.totalAmount ?? order.bill?.totalAmount)}</td><td><span className={`bill-status ${(order.paymentStatus || "pending").toLowerCase()}`}>{order.paymentStatus || "UNKNOWN"}</span></td><td>{formatDate(order.createdAt)}</td><td><div className="bill-row-actions">{order.paymentStatus === "PENDING" && <><button className="bill-view-button" disabled={paymentSavingOrder === order.id} onClick={() => recordOfflinePayment(order, "CASH")}>{paymentSavingOrder === order.id ? "Saving…" : "Cash"}</button><button className="bill-view-button" disabled={paymentSavingOrder === order.id} onClick={() => recordOfflinePayment(order, "OFFLINE_UPI")}>Offline UPI</button></>}{order.paymentStatus === "PAID" && <button className="bill-view-button" disabled={paymentSavingOrder === order.id} onClick={() => recordOrderRefund(order)}>{paymentSavingOrder === order.id ? "Saving…" : "Record refund"}</button>}<button className="bill-view-button" onClick={() => openBill(order)}>View bill</button></div></td></tr>)}
-            </tbody></table></div>
-          )}
+          </form> : <p className="bill-settings-summary">{phonePeLoading ? "Loading saved PhonePe configuration…" : `${phonePeSettings.configured ? "Merchant credentials configured" : "Merchant account not configured"} · ${phonePeSettings.environment} · ${phonePeSettings.onlinePaymentsEnabled ? "Online payments enabled" : "Online payments disabled"}`}</p>}
         </section>
       </div>
 
-      <section className="bill-card bill-payment-history-card">
-        <div className="bill-card-heading"><div><h2>Payment history</h2><p>Verified PhonePe payments and authorized offline collections.</p></div><button className="bill-refresh" onClick={loadPaymentHistory}>↻ Refresh</button></div>
-        {paymentHistory.length === 0 ? <div className="bill-empty">No payments have been recorded yet.</div> : (
+      {activeView === "orders" ? <section className="bill-card bill-orders-card">
+        <div className="bill-card-heading"><div><h2>Order bills</h2><p>Orders from the same table sitting are combined into one bill. All related order IDs appear on the bill.</p></div><span className="bill-count">{filteredOrders.length} of {orders.length} orders</span></div>
+        <div className="bill-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order, table or payment status…"/></div>
+        {loading ? <div className="bill-empty">Loading billing records…</div> : filteredOrders.length === 0 ? <div className="bill-empty">No matching orders found.</div> : (
+          <div className="bill-table-wrap"><table className="bill-table"><thead><tr><th>ORDER</th><th>TABLE</th><th>AMOUNT</th><th>PAYMENT</th><th>DATE</th><th>ACTIONS</th></tr></thead><tbody>
+            {filteredOrders.map((order) => <tr key={order.id || order.orderNumber}>
+              <td><strong>{shortOrderId(order.orderNumber, order.id)}</strong></td>
+              <td>{order.tableNumber || order.table?.tableNumber || "—"}</td>
+              <td>{money(order.totalAmount ?? order.bill?.totalAmount)}</td>
+              <td><span className={`bill-status ${(order.paymentStatus || "pending").toLowerCase()}`}>{order.paymentStatus || "UNKNOWN"}</span></td>
+              <td>{formatDate(order.createdAt)}</td>
+              <td>
+                <div className="bill-row-actions">
+                  {order.paymentStatus === "PENDING" && <>
+                    <button className="bill-view-button" disabled={paymentSavingOrder === order.id} onClick={() => recordOfflinePayment(order, "CASH")}>{paymentSavingOrder === order.id ? "Saving…" : "Cash"}</button>
+                    <button className="bill-view-button" disabled={paymentSavingOrder === order.id} onClick={() => recordOfflinePayment(order, "OFFLINE_UPI")}>Offline UPI</button>
+                  </>}
+                  {order.paymentStatus === "PAID" && <button className="bill-view-button" disabled={paymentSavingOrder === order.id} onClick={() => recordOrderRefund(order)}>{paymentSavingOrder === order.id ? "Saving…" : "Record refund"}</button>}
+                  <button className="bill-view-button" onClick={() => openBill(order)}>View bill</button>
+                  <select
+                    className="bill-paper-select bill-row-paper-select"
+                    aria-label={`Paper size for order ${shortOrderId(order.orderNumber, order.id)}`}
+                    value={billPaperSizes[order.id] || "80mm"}
+                    onChange={(event) => {
+                      const paperSize = event.target.value;
+                      setBillPaperSize(paperSize);
+                      setBillPaperSizes((current) => ({ ...current, [order.id]: paperSize }));
+                    }}
+                  >
+                    <option value="80mm">Thermal 80 mm</option>
+                    <option value="58mm">Thermal 58 mm</option>
+                    <option value="A4">A4 PDF / printer</option>
+                  </select>
+                </div>
+              </td>
+            </tr>)}
+          </tbody></table></div>
+        )}
+      </section> : <section className="bill-card bill-payment-history-card">
+        <div className="bill-card-heading"><div><h2>Payment history</h2><p>Verified PhonePe payments and authorized offline collections.</p></div><span className="bill-count">{paymentHistory.length} payments</span></div>
+        {paymentHistoryLoading ? <div className="bill-empty">Loading payment history…</div> : paymentHistory.length === 0 ? <div className="bill-empty">No payments have been recorded yet.</div> : (
           <div className="bill-table-wrap"><table className="bill-table"><thead><tr><th>DATE</th><th>ORDERS</th><th>TABLE</th><th>AMOUNT</th><th>METHOD</th><th>STATUS</th><th>RECEIPT</th></tr></thead><tbody>
             {paymentHistory.map((payment) => <tr key={payment.transactionId}><td>{formatDate(payment.paidAt || payment.createdAt)}</td><td>{(payment.orderNumbers || []).map((number) => shortOrderId(number)).join(", ") || "—"}</td><td>{payment.tableNumber || "—"}</td><td>{money(payment.amount)}</td><td>{payment.paymentMethod || "—"}</td><td><span className={`bill-status ${String(payment.paymentStatus || "").toLowerCase()}`}>{payment.paymentStatus || "UNKNOWN"}</span></td><td>{payment.paymentStatus === "PAID" && <button className="bill-view-button" onClick={() => openReceipt({ id: payment.transactionId })}>View receipt</button>}</td></tr>)}
           </tbody></table></div>
         )}
-      </section>
+      </section>}
 
       {(billLoading || billError || selectedBill || selectedReceipt) && <div className="bill-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) { setSelectedBill(null); setSelectedReceipt(null); setBillError(""); } }}>
         <section className="bill-modal" role="dialog" aria-modal="true" aria-label="Order bill">
@@ -480,10 +580,10 @@ export default function BillingManagement() {
               {billItems.length > 0 && <table className="bill-receipt-items"><thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead><tbody>{billItems.map((item, index) => <tr key={item.id || index}><td>{item.itemName || item.name || "Item"}{item.customization && <small className="bill-item-customization">Request: {item.customization}</small>}</td><td>{item.quantity || 1}</td><td>{money(item.lineTotal ?? item.totalPrice ?? item.unitPrice)}</td></tr>)}</tbody></table>}
               <div className="bill-receipt-totals"><p><span>Subtotal</span><strong>{money(selectedBill.subtotal)}</strong></p><p><span>Tax</span><strong>{money(selectedBill.taxAmount)}</strong></p><p><span>Service charge</span><strong>{money(selectedBill.serviceChargeAmount)}</strong></p>{Number(selectedBill.rewardDiscountAmount) > 0 && <p><span>Cashback applied</span><strong>−{money(selectedBill.rewardDiscountAmount)}</strong></p>}<p className="bill-grand-total"><span>Total</span><strong>{money(selectedBill.totalAmount)}</strong></p></div>
               <div className="bill-receipt-foot">Payment status: {selectedBill.paymentStatus || selectedBill.order?.paymentStatus || "See order details"}</div>
-            </div><div className="bill-modal-actions"><button className="bill-primary" onClick={printBill}>Print bill</button></div>
+            </div><div className="bill-modal-actions"><button className="bill-primary" onClick={() => printBill(billPaperSize)}>Print bill</button></div>
           </>}
           {!billLoading && !billError && selectedReceipt && <>
-            <div className="bill-print-area">
+            <div className="bill-print-area bill-receipt-print-area">
               <div className="bill-receipt-head">
                 <span className="bill-receipt-mark">T</span>
                 <h2>{selectedReceipt.restaurantName || "Restaurant"}</h2>
@@ -501,7 +601,16 @@ export default function BillingManagement() {
               <div className="bill-receipt-totals"><p><span>Payment method</span><strong>{selectedReceipt.paymentMethod || "—"}</strong></p><p><span>Reference</span><strong>{selectedReceipt.paymentReference || "—"}</strong></p><p className="bill-grand-total"><span>Total paid</span><strong>{money(selectedReceipt.totalAmount)}</strong></p></div>
               <div className="bill-receipt-foot">Payment status: {selectedReceipt.paymentStatus}</div>
             </div>
-            <div className="bill-modal-actions"><button className="bill-view-button" onClick={downloadReceipt}>Download receipt</button><button className="bill-primary" onClick={printBill}>Print receipt</button></div>
+            <div className="bill-modal-actions bill-receipt-actions">
+              <label className="bill-paper-select-label">Paper
+                <select className="bill-paper-select" value={receiptPaperSize} onChange={(event) => setReceiptPaperSize(event.target.value)}>
+                  <option value="80mm">Thermal 80 mm</option>
+                  <option value="58mm">Thermal 58 mm</option>
+                  <option value="A4">A4 PDF / printer</option>
+                </select>
+              </label>
+              <button className="bill-primary" onClick={printBill}>Print receipt</button>
+            </div>
           </>}
         </section>
       </div>}
