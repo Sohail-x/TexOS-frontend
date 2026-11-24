@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE, apiFetch, requireRestaurantId, shortOrderId, useActiveRestaurantId } from "./restaurantApi";
+import { useLiveUpdates } from "./useLiveUpdates";
 import "./Orders.css";
 
 
@@ -81,9 +82,22 @@ export default function Orders() {
     }
   }, [restaurantId]);
 
+  useLiveUpdates({
+    enabled: Boolean(restaurantId),
+    token: localStorage.getItem("texos-token") || "",
+    subscriptions: [{
+      destination: `/topic/restaurants/${restaurantId}/live-orders`,
+      onMessage: () => loadOrders({ quiet: true }),
+    }],
+    onConnected: () => loadOrders({ quiet: true }),
+    fallbacks: [{
+      intervalMs: 30000,
+      callback: () => loadOrders({ quiet: true }),
+    }],
+  });
+
   useEffect(() => {
     let active = true;
-    let interval;
     Promise.resolve().then(() => {
       if (!active) return;
       if (!restaurantId) {
@@ -93,11 +107,9 @@ export default function Orders() {
         return;
       }
       loadOrders();
-      interval = window.setInterval(() => loadOrders({ quiet: true }), 30000);
     });
     return () => {
       active = false;
-      if (interval) window.clearInterval(interval);
     };
   }, [loadOrders, restaurantId]);
 

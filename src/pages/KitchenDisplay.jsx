@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE, apiFetch, requireRestaurantId, shortOrderId, useActiveRestaurantId } from "./restaurantApi";
+import { useLiveUpdates } from "./useLiveUpdates";
 import "./KitchenDisplay.css";
 
 const LANES = [
@@ -106,9 +107,19 @@ export default function KitchenDisplay({
     }
   }, [kitchenFetch, onStaffAccessRevoked, restaurantId, staffMode]);
 
+  useLiveUpdates({
+    enabled: Boolean(restaurantId),
+    token: staffMode ? staffToken : localStorage.getItem("texos-token") || "",
+    subscriptions: [{
+      destination: `/topic/restaurants/${restaurantId}/live-orders`,
+      onMessage: () => loadOrders(true),
+    }],
+    onConnected: () => loadOrders(true),
+    fallbacks: [{ intervalMs: 10000, callback: () => loadOrders(true) }],
+  });
+
   useEffect(() => {
     let active = true;
-    let timer;
     Promise.resolve().then(() => {
       if (!active) return;
       if (!restaurantId) {
@@ -117,11 +128,9 @@ export default function KitchenDisplay({
         return;
       }
       loadOrders();
-      timer = window.setInterval(() => loadOrders(true), 10000);
     });
     return () => {
       active = false;
-      if (timer) window.clearInterval(timer);
     };
   }, [kitchenFetch, loadOrders, restaurantId, staffMode]);
 
@@ -150,7 +159,15 @@ export default function KitchenDisplay({
         }
         throw new Error(body?.message || `Could not update order (HTTP ${response.status})`);
       }
-      await loadOrders(true);
+      const updatedOrder = await response.json().catch(() => null);
+      if (updatedOrder?.id
+        && orders.some((item) => String(item.id) === String(updatedOrder.id))) {
+        setOrders((current) => current.map((item) => (
+          String(item.id) === String(updatedOrder.id) ? updatedOrder : item
+        )));
+      } else {
+        await loadOrders(true);
+      }
     } catch (err) {
       setError(err.message || "Order status update failed.");
     } finally {
@@ -193,7 +210,7 @@ export default function KitchenDisplay({
         {staffMode && <button className="kitchen-refresh" type="button" onClick={onStaffLogout}>Sign out</button>}
         <div className="kitchen-heading-actions"><button className="kitchen-erase-button" type="button" onClick={() => setEraseDialogOpen(true)} disabled={loading || erasing || orders.length === 0}>Erase all orders</button><button className="kitchen-refresh" type="button" onClick={() => loadOrders(true)} disabled={refreshing || erasing}>{refreshing ? "Refreshing…" : "↻ Refresh"}</button><select className="kitchen-status-filter" aria-label="Filter kitchen orders by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">All orders</option><option value="NEW">New orders</option><option value="ACCEPTED">Accepted</option><option value="PREPARING">Preparing</option><option value="READY">Ready to serve</option></select></div>
       </div>
-      <div className="kitchen-statusbar"><span><i /> Live order board</span><span>{filteredActiveOrders.length} active {filteredActiveOrders.length === 1 ? "order" : "orders"}</span>{statusFilter !== "ALL" && <span>Showing: {filterLabel}</span>}<span>Auto refresh: 10 sec</span><span>Last sync: {lastSynced ? lastSynced.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</span></div>
+      <div className="kitchen-statusbar"><span><i /> Live order board</span><span>{filteredActiveOrders.length} active {filteredActiveOrders.length === 1 ? "order" : "orders"}</span>{statusFilter !== "ALL" && <span>Showing: {filterLabel}</span>}<span>Live updates · 10 sec disconnected fallback</span><span>Last sync: {lastSynced ? lastSynced.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</span></div>
       {error && <div className="kitchen-error" role="alert">{error}</div>}
       {loading ? <div className="kitchen-empty">Loading kitchen orders…</div> : filteredActiveOrders.length === 0 ? <div className="kitchen-empty"><strong>{activeOrders.length === 0 ? "Kitchen is all clear" : "No orders match this filter"}</strong><span>{activeOrders.length === 0 ? "New customer orders will appear here automatically." : "Choose another status to view active kitchen orders."}</span></div> : (
         <div className="kitchen-board">

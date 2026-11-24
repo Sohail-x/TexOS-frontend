@@ -12,6 +12,7 @@ import Settings from "./Settings";
 import SubscriptionPage from "./SubscriptionPage";
 import { API_BASE, apiFetch, setActiveRestaurantId, shortOrderId, useActiveRestaurantId } from "./restaurantApi";
 import { clearAuthSession } from "./authSession";
+import { useLiveUpdates } from "./useLiveUpdates";
 import "./Dashboard.css";
 import "./DashboardUpdates.css";
 function Icon({ name, size = 18 }) {
@@ -140,6 +141,10 @@ export default function Dashboard() {
   const seenAnnouncementIds = useRef(new Set());
   const activeAnnouncementPopup = useRef(null);
   const dashboardMountedAt = useRef(null);
+  const paymentNotificationRef = useRef(null);
+  const paymentNotificationLoadInFlight = useRef(false);
+  const refreshAnnouncementsRef = useRef(null);
+  const overviewRefreshTimer = useRef(null);
   const [paymentNotification, setPaymentNotification] = useState(null);
   const [paymentNotificationError, setPaymentNotificationError] = useState("");
   const [theme, setTheme] = useState(() => localStorage.getItem("texos-theme") || "light");
@@ -228,10 +233,49 @@ export default function Dashboard() {
     setLoadingOverview(false);
   }, [restaurantId]);
 
+  const loadNextPaymentNotification = useCallback(async () => {
+    if (!restaurantId
+      || paymentNotificationRef.current?.restaurantId === String(restaurantId)
+      || paymentNotificationLoadInFlight.current) return;
+    paymentNotificationLoadInFlight.current = true;
+    try {
+      const response = await apiFetch(
+        `${API_BASE}/api/restaurants/${restaurantId}/payments/notifications/next`,
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || "Could not load payment notifications.");
+      if (data?.notificationId) {
+        const notification = { ...data, restaurantId: String(restaurantId) };
+        paymentNotificationRef.current = notification;
+        setPaymentNotification(notification);
+        setPaymentNotificationError("");
+      }
+    } catch (error) {
+      setPaymentNotificationError(error.message || "Could not load payment notifications.");
+    } finally {
+      paymentNotificationLoadInFlight.current = false;
+    }
+  }, [restaurantId]);
+
+  const scheduleOverviewRefresh = useCallback(() => {
+    if (overviewRefreshTimer.current) {
+      window.clearTimeout(overviewRefreshTimer.current);
+    }
+    overviewRefreshTimer.current = window.setTimeout(() => {
+      overviewRefreshTimer.current = null;
+      if (location.pathname === "/dashboard") loadOverview(true);
+    }, 120);
+  }, [loadOverview, location.pathname]);
+
+  useEffect(() => () => {
+    if (overviewRefreshTimer.current) {
+      window.clearTimeout(overviewRefreshTimer.current);
+    }
+  }, []);
+
   useEffect(() => {
     if (location.pathname !== "/dashboard") return;
     let active = true;
-    let interval;
     Promise.resolve().then(() => {
       if (!active) return;
       if (!restaurantId) {
@@ -239,40 +283,24 @@ export default function Dashboard() {
         return;
       }
       loadOverview();
-      interval = window.setInterval(() => loadOverview(true), 30000);
     });
     return () => {
       active = false;
-      if (interval) window.clearInterval(interval);
     };
   }, [location.pathname, restaurantId, loadOverview]);
 
   useEffect(() => {
-    if (!restaurantId) return undefined;
+    paymentNotificationRef.current = paymentNotification;
+    if (!restaurantId
+      || paymentNotification?.restaurantId === String(restaurantId)) return undefined;
     let active = true;
-    const pollPaymentNotifications = async () => {
-      if (!active || paymentNotification?.restaurantId === String(restaurantId)) return;
-      try {
-        const response = await apiFetch(
-          `${API_BASE}/api/restaurants/${restaurantId}/payments/notifications/next`,
-        );
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data?.message || "Could not load payment notifications.");
-        if (active && data?.notificationId) {
-          setPaymentNotification({ ...data, restaurantId: String(restaurantId) });
-          setPaymentNotificationError("");
-        }
-      } catch (error) {
-        if (active) setPaymentNotificationError(error.message || "Could not load payment notifications.");
-      }
-    };
-    pollPaymentNotifications();
-    const interval = window.setInterval(pollPaymentNotifications, 5000);
+    Promise.resolve().then(() => {
+      if (active) loadNextPaymentNotification();
+    });
     return () => {
       active = false;
-      window.clearInterval(interval);
     };
-  }, [paymentNotification, restaurantId]);
+  }, [loadNextPaymentNotification, paymentNotification, restaurantId]);
 
   useEffect(() => {
     let active = true;
@@ -316,13 +344,50 @@ export default function Dashboard() {
         if (active) setNotificationsError(error.message || "Could not load TexOS announcements.");
       }
     };
+    refreshAnnouncementsRef.current = pollAnnouncements;
     pollAnnouncements();
-    const interval = window.setInterval(pollAnnouncements, 30000);
     return () => {
       active = false;
-      window.clearInterval(interval);
+      refreshAnnouncementsRef.current = null;
     };
   }, []);
+
+  const dashboardTopics = [
+    ...(restaurantId ? [{
+      destination: `/topic/restaurants/${restaurantId}/dashboard-updates`,
+      onMessage: (event) => {
+        if (event?.type === "PAYMENT_NOTIFICATIONS_CHANGED") {
+          loadNextPaymentNotification();
+        }
+        scheduleOverviewRefresh();
+      },
+    }] : []),
+    {
+      destination: "/topic/announcements",
+      onMessage: () => refreshAnnouncementsRef.current?.(),
+    },
+  ];
+
+  useLiveUpdates({
+    enabled: Boolean(localStorage.getItem("texos-token")),
+    token: localStorage.getItem("texos-token") || "",
+    subscriptions: dashboardTopics,
+    onConnected: () => {
+      scheduleOverviewRefresh();
+      loadNextPaymentNotification();
+      refreshAnnouncementsRef.current?.();
+    },
+    fallbacks: [
+      { intervalMs: 5000, callback: loadNextPaymentNotification },
+      {
+        intervalMs: 30000,
+        callback: () => {
+          if (location.pathname === "/dashboard") loadOverview(true);
+        },
+      },
+      { intervalMs: 30000, callback: () => refreshAnnouncementsRef.current?.() },
+    ],
+  });
 
   const closeAnnouncementPopup = () => {
     const nextAnnouncement = announcementQueue[0] || null;

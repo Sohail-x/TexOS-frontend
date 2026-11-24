@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_BASE, shortOrderId } from "./restaurantApi";
+import { useLiveUpdates } from "./useLiveUpdates";
 import "./OrderApprovalPortal.css";
 
 const SESSION_KEY = "texos-order-approval-session";
@@ -52,6 +53,7 @@ export default function OrderApprovalPortal() {
     typeof Notification !== "undefined" && Notification.permission === "granted",
   );
   const initialOrdersLoaded = useRef(false);
+  const initialOrdersRequestInFlight = useRef(false);
   const notifiedOrderIds = useRef(new Set());
 
   const registerPushSubscription = useCallback(async (token) => {
@@ -100,6 +102,20 @@ export default function OrderApprovalPortal() {
     }
     setOrders(pending);
   }, [notificationsEnabled]);
+
+  const refreshOrders = useCallback(async (initial = false) => {
+    const isInitialLoad = initial || !initialOrdersLoaded.current;
+    if (isInitialLoad && initialOrdersRequestInFlight.current) return;
+    if (isInitialLoad) initialOrdersRequestInFlight.current = true;
+    try {
+      await loadOrders(sessionToken, isInitialLoad);
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message || "Could not refresh pending orders.");
+    } finally {
+      if (isInitialLoad) initialOrdersRequestInFlight.current = false;
+    }
+  }, [loadOrders, sessionToken]);
 
   useEffect(() => {
     let active = true;
@@ -152,24 +168,21 @@ export default function OrderApprovalPortal() {
     }
   }
 
+  useLiveUpdates({
+    enabled: Boolean(sessionToken && restaurant?.restaurantId),
+    token: sessionToken,
+    subscriptions: [{
+      destination: `/topic/restaurants/${restaurant?.restaurantId}/order-approval`,
+      onMessage: () => refreshOrders(),
+    }],
+    onConnected: () => refreshOrders(),
+    fallbacks: [{ intervalMs: 5000, callback: () => refreshOrders() }],
+  });
+
   useEffect(() => {
-    if (!sessionToken || !restaurant?.restaurantId) return undefined;
-    let active = true;
-    const refresh = async (initial = false) => {
-      try {
-        await loadOrders(sessionToken, initial);
-        if (active) setError("");
-      } catch (requestError) {
-        if (active) setError(requestError.message || "Could not refresh pending orders.");
-      }
-    };
-    refresh(true);
-    const timer = window.setInterval(() => refresh(), 5000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [loadOrders, restaurant?.restaurantId, sessionToken]);
+    if (!sessionToken || !restaurant?.restaurantId) return;
+    refreshOrders(true);
+  }, [refreshOrders, restaurant?.restaurantId, sessionToken]);
 
   useEffect(() => {
     if (!sessionToken || typeof Notification === "undefined"
