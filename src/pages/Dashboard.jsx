@@ -75,6 +75,15 @@ function money(value) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(amount);
 }
 
+function loadSeenAnnouncementIds(storageKey) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    return new Set(Array.isArray(saved) ? saved.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
 function dateLabel(value) {
   if (!value) return "Time unavailable";
   const date = new Date(value);
@@ -137,10 +146,10 @@ export default function Dashboard() {
   const [announcementQueue, setAnnouncementQueue] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
-  const announcementBaselineLoaded = useRef(false);
+  const announcementSeenStorageKey =
+    `texos-seen-announcements-${owner?.ownerId ?? owner?.id ?? "account"}`;
   const seenAnnouncementIds = useRef(new Set());
   const activeAnnouncementPopup = useRef(null);
-  const dashboardMountedAt = useRef(null);
   const paymentNotificationRef = useRef(null);
   const paymentNotificationLoadInFlight = useRef(false);
   const refreshAnnouncementsRef = useRef(null);
@@ -304,9 +313,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     let active = true;
+    seenAnnouncementIds.current = loadSeenAnnouncementIds(announcementSeenStorageKey);
     const pollAnnouncements = async () => {
       try {
-        if (dashboardMountedAt.current === null) dashboardMountedAt.current = Date.now();
         const response = await apiFetch(`${API_BASE}/api/announcements/active`);
         const data = await response.json().catch(() => null);
         if (!response.ok) throw new Error(data?.message || `Could not load notifications (HTTP ${response.status}).`);
@@ -314,24 +323,25 @@ export default function Dashboard() {
         setNotificationsError("");
         const currentAnnouncements = Array.isArray(data) ? data : [];
         setAnnouncements(currentAnnouncements);
-        if (!announcementBaselineLoaded.current) {
-          currentAnnouncements.forEach((announcement) => seenAnnouncementIds.current.add(announcement.id));
-          announcementBaselineLoaded.current = true;
-          const justPublished = currentAnnouncements.filter((announcement) => {
-            const createdAt = new Date(announcement.createdAt).getTime();
-            return Number.isFinite(createdAt) && createdAt >= dashboardMountedAt.current - 15000;
-          });
-          if (justPublished.length > 0) {
-            activeAnnouncementPopup.current = justPublished[0];
-            setAnnouncementPopup(justPublished[0]);
-            setAnnouncementQueue((queue) => [...queue, ...justPublished.slice(1)]);
-          }
-          return;
-        }
-        const freshAnnouncements = currentAnnouncements.filter(
-          (announcement) => !seenAnnouncementIds.current.has(announcement.id),
+        const currentIds = new Set(
+          currentAnnouncements.map((announcement) => String(announcement.id)),
         );
-        freshAnnouncements.forEach((announcement) => seenAnnouncementIds.current.add(announcement.id));
+        seenAnnouncementIds.current.forEach((id) => {
+          if (!currentIds.has(id)) seenAnnouncementIds.current.delete(id);
+        });
+        const freshAnnouncements = currentAnnouncements.filter(
+          (announcement) => !seenAnnouncementIds.current.has(String(announcement.id)),
+        );
+        freshAnnouncements.forEach((announcement) =>
+          seenAnnouncementIds.current.add(String(announcement.id)));
+        try {
+          localStorage.setItem(
+            announcementSeenStorageKey,
+            JSON.stringify([...seenAnnouncementIds.current]),
+          );
+        } catch (storageError) {
+          console.error("Could not persist seen announcement IDs.", storageError);
+        }
         if (freshAnnouncements.length === 0) return;
         if (!activeAnnouncementPopup.current) {
           activeAnnouncementPopup.current = freshAnnouncements[0];
@@ -350,7 +360,7 @@ export default function Dashboard() {
       active = false;
       refreshAnnouncementsRef.current = null;
     };
-  }, []);
+  }, [announcementSeenStorageKey]);
 
   const dashboardTopics = [
     ...(restaurantId ? [{
