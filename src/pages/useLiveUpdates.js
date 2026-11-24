@@ -74,7 +74,7 @@ export function useLiveUpdates({
       onStompError: startFallbacks,
     });
 
-    void client.activate().catch(startFallbacks);
+    client.activate();
 
     return () => {
       active = false;
