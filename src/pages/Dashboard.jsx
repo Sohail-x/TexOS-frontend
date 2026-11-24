@@ -317,7 +317,7 @@ export default function Dashboard() {
       }
     };
     pollAnnouncements();
-    const interval = window.setInterval(pollAnnouncements, 10000);
+    const interval = window.setInterval(pollAnnouncements, 30000);
     return () => {
       active = false;
       window.clearInterval(interval);
