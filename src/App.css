@@ -575,7 +575,7 @@
 
 /* Light Theme Features Background Adjustments */
 .app[data-theme="light"] #features {
-  background-color: var(--background);
+  background: linear-gradient(120deg, #f0fdfa 0%, #e0f2fe 100%);
 }
 
 .app[data-theme="light"] #features .feature-card {
@@ -587,7 +587,7 @@
    ========================================== */
 .ordering-section {
   padding: 100px 8%;
-  background: var(--background);
+  background: linear-gradient(120deg, #f0fdfa 0%, #e0f2fe 100%);
 }
 
 .ordering-grid,
@@ -626,7 +626,7 @@
 }
 
 .pricing-section {
-  background: var(--surface);
+  background: linear-gradient(120deg, #f0fdfa 0%, #e0f2fe 100%);
 }
 
 .pricing-grid {
@@ -741,14 +741,12 @@
    ========================================== */
 .cta-section {
   padding: 85px 8%;
-  background: #03192e;
   text-align: center;
 }
 
 .cta-section h2 {
   max-width: 650px;
   margin: 15px auto;
-  color: #fff;
 }
 
 .cta-section > p {
@@ -936,6 +934,29 @@
   justify-content: center;
   margin-top: 10px;
   cursor: pointer;
+}
+
+.google-signin-button {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 17px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--border);
 }
 
 .auth-switch {

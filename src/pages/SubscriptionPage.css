@@ -29,10 +29,7 @@
 .subscription-history-table{overflow:auto}
 .subscription-history table{border-collapse:collapse;width:100%;color:var(--text);font-size:13px}
 .subscription-history th,.subscription-history td{padding:10px;text-align:left;border-bottom:1px solid var(--border)}
-.google-signin-button{display:flex;justify-content:center;margin:16px 0}
 .subscription-embedded .subscription-main{width:100%;padding:0}
 .subscription-embedded .subscription-plan-grid{max-width:680px;margin:0 auto}
-.auth-divider{display:flex;align-items:center;gap:12px;margin:17px 0;color:var(--muted);font-size:12px}
-.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:var(--border)}
 @media(max-width:760px){.subscription-overview-grid{grid-template-columns:1fr}.subscription-overview-grid .subscription-current{max-width:none}}
 @media(max-width:600px){.subscription-main{padding-top:32px}.subscription-current{align-items:flex-start;gap:12px}.subscription-history{padding:14px}}

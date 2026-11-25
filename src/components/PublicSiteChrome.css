@@ -1,0 +1,120 @@
+.footer-expanded {
+  display: block;
+  min-height: 0;
+  padding: 38px 8% 18px;
+  background: linear-gradient(120deg, #f0fdfa 0%, #e0f2fe 100%);
+}
+
+.footer-main {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) 2.5fr;
+  gap: 42px;
+  align-items: start;
+  width: min(1240px, 100%);
+  margin: 0 auto;
+}
+
+.footer-brand-block .footer-brand {
+  display: inline-flex;
+}
+
+.footer-brand-block > p {
+  max-width: 220px;
+  margin: 12px 0;
+  line-height: 1.6;
+}
+
+.footer-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.footer-group {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.footer-group h2 {
+  margin: 0 0 3px;
+  color: var(--text, #0f172a);
+  font-size: 13px;
+}
+
+.footer-group a {
+  color: var(--muted, #64748b);
+  font-size: 12px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.footer-group a:hover {
+  color: var(--primary, #00b4d8);
+}
+
+.footer-group a:focus-visible,
+.footer-social-icons a:focus-visible {
+  outline: 3px solid var(--primary, #00b4d8);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  width: min(1240px, 100%);
+  margin: 30px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  color: var(--muted, #64748b);
+  font-size: 11px;
+}
+
+.footer-social-icons a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #22d3ee;
+  transition: color 0.2s ease, transform 0.2s ease, filter 0.2s ease;
+}
+
+.footer-social-icons a:hover {
+  color: #0077b6;
+  filter: drop-shadow(0 0 6px rgba(0, 119, 182, 0.45));
+  transform: translateY(-2px);
+}
+
+.app[data-theme="dark"] .footer-social-icons a:hover,
+.public-app[data-theme="dark"] .footer-social-icons a:hover {
+  color: #ffffff;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.75));
+}
+
+@media (max-width: 900px) {
+  .footer-main {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+
+  .footer-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .footer-expanded {
+    padding: 30px 6% 16px;
+    text-align: left;
+  }
+
+  .footer-groups {
+    gap: 25px 16px;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    text-align: center;
+  }
+}
