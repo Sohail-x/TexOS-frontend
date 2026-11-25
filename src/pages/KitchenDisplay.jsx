@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, apiFetch, requireRestaurantId, shortOrderId, useActiveRestaurantId } from "./restaurantApi";
 import { useLiveUpdates } from "./useLiveUpdates";
 import "./KitchenDisplay.css";
@@ -60,6 +60,9 @@ export default function KitchenDisplay({
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
   const [erasing, setErasing] = useState(false);
+  const ordersRequestRef = useRef(null);
+  const ordersLoadedRef = useRef(false);
+  const liveConnectedRef = useRef(false);
   const [dismissalState, setDismissalState] = useState(() => ({
     storageKey: dismissalStorageKey,
     orderIds: getDismissedOrderIds(dismissalStorageKey),
@@ -82,12 +85,18 @@ export default function KitchenDisplay({
   }, [staffMode, staffToken]);
 
   const loadOrders = useCallback(async (quiet = false) => {
+    if (ordersRequestRef.current) return;
+    const controller = new AbortController();
+    ordersRequestRef.current = controller;
     if (quiet) setRefreshing(true); else setLoading(true);
     try {
       const path = staffMode
         ? "/api/kitchen-staff/orders"
-        : `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders`;
-      const response = await kitchenFetch(path, { headers: { Accept: "application/json" } });
+        : `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/kitchen/orders`;
+      const response = await kitchenFetch(path, {
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         if (staffMode && [401, 403].includes(response.status)) {
@@ -96,14 +105,24 @@ export default function KitchenDisplay({
         }
         throw new Error(body?.message || `Unable to load kitchen orders (HTTP ${response.status})`);
       }
-      setOrders(unwrap(await response.json()));
+      const data = await response.json();
+      if (controller.signal.aborted) return;
+      setOrders(unwrap(data));
+      ordersLoadedRef.current = true;
       setError("");
       setLastSynced(new Date());
     } catch (err) {
-      setError(err.message || "Could not connect to TexOS backend.");
+      if (!controller.signal.aborted) {
+        setError(err.message || "Could not connect to TexOS backend.");
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (ordersRequestRef.current === controller) {
+        ordersRequestRef.current = null;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
     }
   }, [kitchenFetch, onStaffAccessRevoked, restaurantId, staffMode]);
 
@@ -114,7 +133,10 @@ export default function KitchenDisplay({
       destination: `/topic/restaurants/${restaurantId}/live-orders`,
       onMessage: () => loadOrders(true),
     }],
-    onConnected: () => loadOrders(true),
+    onConnected: () => {
+      if (liveConnectedRef.current || !ordersLoadedRef.current) loadOrders(true);
+      liveConnectedRef.current = true;
+    },
     fallbacks: [{ intervalMs: 10000, callback: () => loadOrders(true) }],
   });
 
@@ -131,6 +153,8 @@ export default function KitchenDisplay({
     });
     return () => {
       active = false;
+      ordersRequestRef.current?.abort();
+      ordersRequestRef.current = null;
     };
   }, [kitchenFetch, loadOrders, restaurantId, staffMode]);
 

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { href, Link } from "react-router-dom";
 import { PublicSiteFooter, PublicSiteHeader } from "../components/PublicSiteChrome";
 import { API_BASE } from "./restaurantApi";
+import { usePublicMetadata } from "./usePublicMetadata";
 import "./PublicInformationPages.css";
 
 const faqCategories = [
@@ -168,61 +169,6 @@ const legalPages = {
 };
 
 const faqSlug = "/faq";
-const homeMetadata = {
-  title: "TexOS – The Operating System for Modern Restaurants",
-  description: "Manage restaurant menus, orders, kitchen operations, loyalty, and billing with TexOS.",
-};
-
-function usePublicMetadata(title, description, path) {
-  useEffect(() => {
-    const previousTitle = document.title;
-    document.title = title;
-    const cleanupMeta = [];
-    const setMeta = (selector, attribute, value) => {
-      let element = document.head.querySelector(selector);
-      let created = false;
-      const previousContent = element?.getAttribute("content");
-      if (!element) {
-        element = document.createElement("meta");
-        const [key, keyValue] = selector.match(/\[(name|property)="([^"]+)"\]/).slice(1);
-        element.setAttribute(key, keyValue);
-        document.head.appendChild(element);
-        created = true;
-      }
-      element.setAttribute("content", value);
-      return () => {
-        if (created) element.remove();
-        else if (previousContent === null) element.removeAttribute("content");
-        else element.setAttribute("content", previousContent);
-      };
-    };
-    cleanupMeta.push(setMeta('meta[name="description"]', "name", description));
-    cleanupMeta.push(setMeta('meta[property="og:title"]', "property", title));
-    cleanupMeta.push(setMeta('meta[property="og:description"]', "property", description));
-    cleanupMeta.push(setMeta('meta[property="og:type"]', "property", "website"));
-    const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.replace(/\/$/, "");
-    let canonical = document.head.querySelector('link[rel="canonical"]');
-    let createdCanonical = false;
-    const previousCanonical = canonical?.href;
-    if (configuredSiteUrl) {
-      const siteOrigin = new URL(configuredSiteUrl).origin;
-      if (!canonical) {
-        canonical = document.createElement("link");
-        canonical.rel = "canonical";
-        document.head.appendChild(canonical);
-        createdCanonical = true;
-      }
-      canonical.href = `${siteOrigin}${path}`;
-    }
-    return () => {
-      document.title = previousTitle;
-      cleanupMeta.forEach((cleanup) => cleanup());
-      if (createdCanonical) canonical.remove();
-      else if (canonical && previousCanonical) canonical.href = previousCanonical;
-    };
-  }, [title, description, path]);
-}
-
 function useTheme() {
   const [theme, setTheme] = useState(() => {
     try {
@@ -252,16 +198,6 @@ function PublicLayout({ children }) {
       <PublicSiteFooter />
     </div>
   );
-}
-
-export function HomePageMetadata() {
-  usePublicMetadata(homeMetadata.title, homeMetadata.description, "/");
-  return null;
-}
-
-export function SubscriptionPageMetadata() {
-  usePublicMetadata("Plans | TexOS", "Explore TexOS restaurant subscription plans and available features.", "/plans");
-  return null;
 }
 
 function PageIntro({ eyebrow = "TEXOS", title, description }) {

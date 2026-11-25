@@ -54,6 +54,8 @@ export default function OrderApprovalPortal() {
   );
   const initialOrdersLoaded = useRef(false);
   const initialOrdersRequestInFlight = useRef(false);
+  const ordersRequestRef = useRef(null);
+  const liveConnectedRef = useRef(false);
   const notifiedOrderIds = useRef(new Set());
 
   const registerPushSubscription = useCallback(async (token) => {
@@ -75,8 +77,9 @@ export default function OrderApprovalPortal() {
     });
   }, []);
 
-  const loadOrders = useCallback(async (token, initial = false) => {
-    const data = await request("/api/order-approval/staff/orders", token);
+  const loadOrders = useCallback(async (token, initial = false, signal) => {
+    const data = await request("/api/order-approval/staff/orders", token, { signal });
+    if (signal?.aborted) return;
     const pending = Array.isArray(data) ? data : [];
     if (initial && !initialOrdersLoaded.current) {
       pending.forEach((order) => notifiedOrderIds.current.add(String(order.id)));
@@ -105,17 +108,31 @@ export default function OrderApprovalPortal() {
 
   const refreshOrders = useCallback(async (initial = false) => {
     const isInitialLoad = initial || !initialOrdersLoaded.current;
-    if (isInitialLoad && initialOrdersRequestInFlight.current) return;
+    if (ordersRequestRef.current
+      || (isInitialLoad && initialOrdersRequestInFlight.current)) return;
     if (isInitialLoad) initialOrdersRequestInFlight.current = true;
+    const controller = new AbortController();
+    ordersRequestRef.current = controller;
     try {
-      await loadOrders(sessionToken, isInitialLoad);
-      setError("");
+      await loadOrders(sessionToken, isInitialLoad, controller.signal);
+      if (!controller.signal.aborted) setError("");
     } catch (requestError) {
-      setError(requestError.message || "Could not refresh pending orders.");
+      if (!controller.signal.aborted) {
+        setError(requestError.message || "Could not refresh pending orders.");
+      }
     } finally {
-      if (isInitialLoad) initialOrdersRequestInFlight.current = false;
+      if (ordersRequestRef.current === controller) {
+        ordersRequestRef.current = null;
+        if (isInitialLoad) initialOrdersRequestInFlight.current = false;
+      }
     }
   }, [loadOrders, sessionToken]);
+
+  useEffect(() => () => {
+    ordersRequestRef.current?.abort();
+    ordersRequestRef.current = null;
+    initialOrdersRequestInFlight.current = false;
+  }, [sessionToken, restaurant?.restaurantId]);
 
   useEffect(() => {
     let active = true;
@@ -175,7 +192,10 @@ export default function OrderApprovalPortal() {
       destination: `/topic/restaurants/${restaurant?.restaurantId}/order-approval`,
       onMessage: () => refreshOrders(),
     }],
-    onConnected: () => refreshOrders(),
+    onConnected: () => {
+      if (liveConnectedRef.current || !initialOrdersLoaded.current) refreshOrders();
+      liveConnectedRef.current = true;
+    },
     fallbacks: [{ intervalMs: 5000, callback: () => refreshOrders() }],
   });
 

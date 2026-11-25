@@ -1,36 +1,47 @@
 import './App.css';
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Routes, Route, Link, useParams, useLocation } from "react-router-dom";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./pages/Dashboard";
-import CustomerMenu from "./pages/CustomerMenu";
-import CustomerAuthPage from "./pages/CustomerAuthPage";
-import AdminPortal from "./pages/AdminPortal";
-import ClientDataPage from "./pages/ClientDataPage";
 import ProtectedRoute from "./pages/ProtectedRoute";
-import SubscriptionPage from "./pages/SubscriptionPage";
-import GoogleOnboarding from "./pages/GoogleOnboarding";
 import { API_BASE } from "./pages/restaurantApi";
-import KitchenStaffPortal from "./pages/KitchenStaffPortal";
-import OrderApprovalPortal from "./pages/OrderApprovalPortal";
 import { PublicSiteFooter, PublicSiteHeader } from "./components/PublicSiteChrome";
-import {
-  AboutPage,
-  ContactPage,
-  CookiePolicyPage,
-  FaqPage,
-  GrievancePage,
-  HomePageMetadata,
-  PaymentSecurityPage,
-  PrivacyPolicyPage,
-  RefundPolicyPage,
-  SupportPage,
-  SubscriptionPageMetadata,
-  TermsPage,
-} from "./pages/PublicInformationPages";
+
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const CustomerMenu = lazy(() => import("./pages/CustomerMenu"));
+const CustomerAuthPage = lazy(() => import("./pages/CustomerAuthPage"));
+const AdminPortal = lazy(() => import("./pages/AdminPortal"));
+const ClientDataPage = lazy(() => import("./pages/ClientDataPage"));
+const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
+const GoogleOnboarding = lazy(() => import("./pages/GoogleOnboarding"));
+const KitchenStaffPortal = lazy(() => import("./pages/KitchenStaffPortal"));
+const OrderApprovalPortal = lazy(() => import("./pages/OrderApprovalPortal"));
+const AboutPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.AboutPage })));
+const ContactPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.ContactPage })));
+const CookiePolicyPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.CookiePolicyPage })));
+const FaqPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.FaqPage })));
+const GrievancePage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.GrievancePage })));
+const HomePageMetadata = lazy(() => import("./pages/PublicMetadata")
+  .then((pages) => ({ default: pages.HomePageMetadata })));
+const PaymentSecurityPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.PaymentSecurityPage })));
+const PrivacyPolicyPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.PrivacyPolicyPage })));
+const RefundPolicyPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.RefundPolicyPage })));
+const SupportPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.SupportPage })));
+const SubscriptionPageMetadata = lazy(() => import("./pages/PublicMetadata")
+  .then((pages) => ({ default: pages.SubscriptionPageMetadata })));
+const TermsPage = lazy(() => import("./pages/PublicInformationPages")
+  .then((pages) => ({ default: pages.TermsPage })));
 
 const features = [
   {
@@ -355,8 +366,13 @@ function CustomerMenuRoute() {
   return <CustomerMenu key={qrToken} />;
 }
 
+function RouteLoading() {
+  return <main className="auth-container" role="status" aria-live="polite">Loading TexOS…</main>;
+}
+
 function App() {
   return (
+    <Suspense fallback={<RouteLoading />}>
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
@@ -387,6 +403,7 @@ function App() {
       <Route path="/menu/:qrToken/signup" element={<CustomerAuthPage mode="signup" />} />
       <Route path="/menu/:qrToken/forgot-password" element={<CustomerAuthPage mode="forgot-password" />} />
     </Routes>
+    </Suspense>
   );
 }
 

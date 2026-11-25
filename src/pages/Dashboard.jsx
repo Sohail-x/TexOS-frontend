@@ -1,20 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import Orders from "./Orders";
-import KitchenDisplay from "./KitchenDisplay";
-import MenuManagement from "./MenuManagement";
-import TablesAndQR from "./TablesAndQR";
-import BillingManagement from "./BillingManagement";
-import ReportsAnalytics from "./ReportsAnalytics";
-import Customers from "./Customers";
-import RewardManagement from "./RewardManagement";
-import Settings from "./Settings";
-import SubscriptionPage from "./SubscriptionPage";
 import { API_BASE, apiFetch, setActiveRestaurantId, shortOrderId, useActiveRestaurantId } from "./restaurantApi";
 import { clearAuthSession } from "./authSession";
 import { useLiveUpdates } from "./useLiveUpdates";
 import "./Dashboard.css";
 import "./DashboardUpdates.css";
+
+const Orders = lazy(() => import("./Orders"));
+const KitchenDisplay = lazy(() => import("./KitchenDisplay"));
+const MenuManagement = lazy(() => import("./MenuManagement"));
+const TablesAndQR = lazy(() => import("./TablesAndQR"));
+const BillingManagement = lazy(() => import("./BillingManagement"));
+const ReportsAnalytics = lazy(() => import("./ReportsAnalytics"));
+const Customers = lazy(() => import("./Customers"));
+const RewardManagement = lazy(() => import("./RewardManagement"));
+const Settings = lazy(() => import("./Settings"));
+const SubscriptionPage = lazy(() => import("./SubscriptionPage"));
+
 function Icon({ name, size = 18 }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
   const paths = {
@@ -152,6 +154,10 @@ export default function Dashboard() {
   const activeAnnouncementPopup = useRef(null);
   const paymentNotificationRef = useRef(null);
   const paymentNotificationLoadInFlight = useRef(false);
+  const paymentNotificationRequestRef = useRef(null);
+  const overviewRequestRef = useRef(null);
+  const announcementRequestRef = useRef(null);
+  const liveConnectedRef = useRef(false);
   const refreshAnnouncementsRef = useRef(null);
   const overviewRefreshTimer = useRef(null);
   const [paymentNotification, setPaymentNotification] = useState(null);
@@ -214,32 +220,41 @@ export default function Dashboard() {
       setLoadingOverview(false);
       return;
     }
+    if (overviewRequestRef.current) return;
+    const controller = new AbortController();
+    overviewRequestRef.current = controller;
     if (!quiet) setLoadingOverview(true);
     setOverviewError("");
-    const base = `${API_BASE}/api/restaurants/${restaurantId}/dashboard`;
-    const requests = await Promise.allSettled([
-      apiFetch(`${base}/summary`),
-      apiFetch(`${base}/recent-orders`),
-      apiFetch(`${base}/active-orders`),
-    ]);
+    try {
+      const base = `${API_BASE}/api/restaurants/${restaurantId}/dashboard`;
+      const requests = await Promise.allSettled([
+        apiFetch(`${base}/summary`, { signal: controller.signal }),
+        apiFetch(`${base}/recent-orders`, { signal: controller.signal }),
+        apiFetch(`${base}/active-orders`, { signal: controller.signal }),
+      ]);
 
-    const results = await Promise.all(requests.map(async (result) => {
-      if (result.status !== "fulfilled") throw result.reason;
-      const response = result.value;
-      if (!response.ok) throw new Error(`Dashboard API returned HTTP ${response.status}`);
-      return response.json();
-    }).map((promise) => promise.catch((error) => ({ __error: error.message }))));
+      const results = await Promise.all(requests.map(async (result) => {
+        if (result.status !== "fulfilled") throw result.reason;
+        const response = result.value;
+        if (!response.ok) throw new Error(`Dashboard API returned HTTP ${response.status}`);
+        return response.json();
+      }).map((promise) => promise.catch((error) => ({ __error: error.message }))));
+      if (controller.signal.aborted) return;
 
-    const [summaryData, recentData, activeData] = results;
-    if (!summaryData?.__error) setSummary(summaryData?.summary || summaryData?.data || summaryData);
-    if (!recentData?.__error) setRecentOrders(unwrapList(recentData));
-    if (!activeData?.__error) setActiveOrders(unwrapList(activeData));
+      const [summaryData, recentData, activeData] = results;
+      if (!summaryData?.__error) setSummary(summaryData?.summary || summaryData?.data || summaryData);
+      if (!recentData?.__error) setRecentOrders(unwrapList(recentData));
+      if (!activeData?.__error) setActiveOrders(unwrapList(activeData));
 
-    const errors = results.filter((item) => item?.__error).map((item) => item.__error);
-    if (errors.length === 3) setOverviewError("Could not load dashboard data. Check that the backend is running and the restaurant ID is correct.");
-    else if (errors.length) setOverviewError("Some dashboard sections could not be loaded. Check the backend response.");
-
-    setLoadingOverview(false);
+      const errors = results.filter((item) => item?.__error).map((item) => item.__error);
+      if (errors.length === 3) setOverviewError("Could not load dashboard data. Check that the backend is running and the restaurant ID is correct.");
+      else if (errors.length) setOverviewError("Some dashboard sections could not be loaded. Check the backend response.");
+    } finally {
+      if (overviewRequestRef.current === controller) {
+        overviewRequestRef.current = null;
+        if (!controller.signal.aborted) setLoadingOverview(false);
+      }
+    }
   }, [restaurantId]);
 
   const loadNextPaymentNotification = useCallback(async () => {
@@ -247,11 +262,15 @@ export default function Dashboard() {
       || paymentNotificationRef.current?.restaurantId === String(restaurantId)
       || paymentNotificationLoadInFlight.current) return;
     paymentNotificationLoadInFlight.current = true;
+    const controller = new AbortController();
+    paymentNotificationRequestRef.current = controller;
     try {
       const response = await apiFetch(
         `${API_BASE}/api/restaurants/${restaurantId}/payments/notifications/next`,
+        { signal: controller.signal },
       );
       const data = await response.json().catch(() => ({}));
+      if (controller.signal.aborted) return;
       if (!response.ok) throw new Error(data?.message || "Could not load payment notifications.");
       if (data?.notificationId) {
         const notification = { ...data, restaurantId: String(restaurantId) };
@@ -260,10 +279,21 @@ export default function Dashboard() {
         setPaymentNotificationError("");
       }
     } catch (error) {
-      setPaymentNotificationError(error.message || "Could not load payment notifications.");
+      if (!controller.signal.aborted) {
+        setPaymentNotificationError(error.message || "Could not load payment notifications.");
+      }
     } finally {
-      paymentNotificationLoadInFlight.current = false;
+      if (paymentNotificationRequestRef.current === controller) {
+        paymentNotificationRequestRef.current = null;
+        paymentNotificationLoadInFlight.current = false;
+      }
     }
+  }, [restaurantId]);
+
+  useEffect(() => () => {
+    paymentNotificationRequestRef.current?.abort();
+    paymentNotificationRequestRef.current = null;
+    paymentNotificationLoadInFlight.current = false;
   }, [restaurantId]);
 
   const scheduleOverviewRefresh = useCallback(() => {
@@ -295,6 +325,8 @@ export default function Dashboard() {
     });
     return () => {
       active = false;
+      overviewRequestRef.current?.abort();
+      overviewRequestRef.current = null;
     };
   }, [location.pathname, restaurantId, loadOverview]);
 
@@ -315,9 +347,15 @@ export default function Dashboard() {
     let active = true;
     seenAnnouncementIds.current = loadSeenAnnouncementIds(announcementSeenStorageKey);
     const pollAnnouncements = async () => {
+      if (announcementRequestRef.current) return;
+      const controller = new AbortController();
+      announcementRequestRef.current = controller;
       try {
-        const response = await apiFetch(`${API_BASE}/api/announcements/active`);
+        const response = await apiFetch(`${API_BASE}/api/announcements/active`, {
+          signal: controller.signal,
+        });
         const data = await response.json().catch(() => null);
+        if (controller.signal.aborted) return;
         if (!response.ok) throw new Error(data?.message || `Could not load notifications (HTTP ${response.status}).`);
         if (!active) return;
         setNotificationsError("");
@@ -351,13 +389,21 @@ export default function Dashboard() {
           setAnnouncementQueue((queue) => [...queue, ...freshAnnouncements]);
         }
       } catch (error) {
-        if (active) setNotificationsError(error.message || "Could not load TexOS announcements.");
+        if (active && !controller.signal.aborted) {
+          setNotificationsError(error.message || "Could not load TexOS announcements.");
+        }
+      } finally {
+        if (announcementRequestRef.current === controller) {
+          announcementRequestRef.current = null;
+        }
       }
     };
     refreshAnnouncementsRef.current = pollAnnouncements;
     pollAnnouncements();
     return () => {
       active = false;
+      announcementRequestRef.current?.abort();
+      announcementRequestRef.current = null;
       refreshAnnouncementsRef.current = null;
     };
   }, [announcementSeenStorageKey]);
@@ -383,6 +429,10 @@ export default function Dashboard() {
     token: localStorage.getItem("texos-token") || "",
     subscriptions: dashboardTopics,
     onConnected: () => {
+      if (!liveConnectedRef.current) {
+        liveConnectedRef.current = true;
+        return;
+      }
       scheduleOverviewRefresh();
       loadNextPaymentNotification();
       refreshAnnouncementsRef.current?.();

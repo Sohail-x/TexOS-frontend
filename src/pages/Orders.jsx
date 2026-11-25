@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, apiFetch, requireRestaurantId, shortOrderId, useActiveRestaurantId } from "./restaurantApi";
 import { useLiveUpdates } from "./useLiveUpdates";
 import "./Orders.css";
@@ -50,8 +50,14 @@ export default function Orders() {
   const [toDate, setToDate] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
+  const ordersRequestRef = useRef(null);
+  const ordersLoadedRef = useRef(false);
+  const liveConnectedRef = useRef(false);
 
   const loadOrders = useCallback(async ({ quiet = false } = {}) => {
+    if (ordersRequestRef.current) return;
+    const controller = new AbortController();
+    ordersRequestRef.current = controller;
     if (quiet) setRefreshing(true);
     else setLoading(true);
     setError("");
@@ -59,7 +65,7 @@ export default function Orders() {
     try {
       const response = await apiFetch(
         `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders`,
-        { headers: { Accept: "application/json" } }
+        { headers: { Accept: "application/json" }, signal: controller.signal }
       );
 
       if (!response.ok) {
@@ -69,16 +75,25 @@ export default function Orders() {
 
       const data = await response.json();
       const list = Array.isArray(data) ? data : data?.content || data?.orders || [];
+      if (controller.signal.aborted) return;
       setOrders(list);
+      ordersLoadedRef.current = true;
       setSelectedOrder((current) => {
         if (!current) return current;
         return list.find((order) => order.id === current.id) || null;
       });
     } catch (err) {
-      setError(getErrorMessage(err, "Unable to connect to the TexOS backend."));
+      if (!controller.signal.aborted) {
+        setError(getErrorMessage(err, "Unable to connect to the TexOS backend."));
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (ordersRequestRef.current === controller) {
+        ordersRequestRef.current = null;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
     }
   }, [restaurantId]);
 
@@ -89,7 +104,12 @@ export default function Orders() {
       destination: `/topic/restaurants/${restaurantId}/live-orders`,
       onMessage: () => loadOrders({ quiet: true }),
     }],
-    onConnected: () => loadOrders({ quiet: true }),
+    onConnected: () => {
+      if (liveConnectedRef.current || !ordersLoadedRef.current) {
+        loadOrders({ quiet: true });
+      }
+      liveConnectedRef.current = true;
+    },
     fallbacks: [{
       intervalMs: 30000,
       callback: () => loadOrders({ quiet: true }),
@@ -110,6 +130,8 @@ export default function Orders() {
     });
     return () => {
       active = false;
+      ordersRequestRef.current?.abort();
+      ordersRequestRef.current = null;
     };
   }, [loadOrders, restaurantId]);
 
