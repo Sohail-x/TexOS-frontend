@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./CustomerMenu.css";
 import { Client } from "@stomp/stompjs";
@@ -191,7 +191,7 @@ function QuantityControl({ quantity, onChange, compact = false }) {
 // LoyaltyPrompt now renders as an inline card inside the Reward page (not a floating overlay).
 // Auto-polling has been removed – data is loaded once when the tab opens.
 // A manual "↻ Refresh reward data" button lets customers refresh on demand.
-function LoyaltyPrompt({ qrToken, rewardStatus, loading, error, onManualRefresh, onUseReward }) {
+function LoyaltyPrompt({ qrToken, rewardStatus, loading, error, onManualRefresh, onLoadMore, onUseReward }) {
   const navigate = useNavigate();
   const [historyPeriod, setHistoryPeriod] = useState("lastWeek");
   const [historyFrom, setHistoryFrom] = useState("");
@@ -267,7 +267,7 @@ function LoyaltyPrompt({ qrToken, rewardStatus, loading, error, onManualRefresh,
             {rewards.length ? rewards.map((reward) => {
               const enough = authenticated && Number(rewardStatus.availablePoints || 0) >= Number(reward.pointsRequired || 0);
               return <article className="cm-loyalty-reward-card" key={reward.id}>
-                {reward.imageUrl && <img src={reward.imageUrl} alt={reward.rewardName} />}
+                {reward.imageUrl && <img src={reward.imageUrl} alt={reward.rewardName} loading="lazy" decoding="async" />}
                 <div><strong>{reward.rewardName}</strong><p>{reward.description || reward.menuItemName || reward.rewardType?.replaceAll("_", " ")}</p><b>{reward.pointsRequired} points</b></div>
                 {authenticated && enough
                   ? <button type="button" className="cm-loyalty-use-button" onClick={() => onUseReward(reward.id)}>Use at Checkout</button>
@@ -291,12 +291,20 @@ function LoyaltyPrompt({ qrToken, rewardStatus, loading, error, onManualRefresh,
                 </>}
               </div>
             </div>
-            {filteredTransactions.length ? filteredTransactions.slice(0, 20).map((item) => (
+            {filteredTransactions.length ? filteredTransactions.map((item) => (
               <div className="cm-loyalty-history-row" key={item.id}>
                 <span><strong>{item.description || item.type}</strong><small>{item.orderId ? `Order ${item.orderId}` : item.type} · {item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-IN") : ""}</small></span>
                 <b className={Number(item.points) >= 0 ? "positive" : "negative"}>{Number(item.points) > 0 ? "+" : ""}{item.points}</b>
               </div>
             )) : <p className="cm-modal-muted">No points history found for the selected date range.</p>}
+            {rewardStatus.transactionsHasMore && <button
+              type="button"
+              className="cm-text-button"
+              disabled={loading}
+              onClick={onLoadMore}
+            >
+              {loading ? "Loading…" : "Load more history"}
+            </button>}
           </div>}
           <div className="cm-loyalty-how"><h3>How it works</h3><ol><li>Place an eligible order.</li><li>Earn points after payment is confirmed and the order is served.</li><li>Collect points with every eligible visit.</li><li>Redeem a reward during checkout.</li></ol></div>
         </>}
@@ -877,6 +885,10 @@ export default function CustomerMenu() {
   const [rewardError, setRewardError] = useState("");
   const [selectedRewardId, setSelectedRewardId] = useState("");
   const [selectedRewardPoints, setSelectedRewardPoints] = useState("");
+  const rewardHistoryPageRef = useRef(0);
+  const rewardHistoryRangeRef = useRef(null);
+  const rewardStatusRequestIdRef = useRef(0);
+  const rewardStatusAbortRef = useRef(null);
 
   const [customerSession, setCustomerSession] = useState(() => {
     try {
@@ -946,22 +958,65 @@ export default function CustomerMenu() {
     }
   }, [qrToken]);
 
-  const loadRewardStatus = useCallback(async (historyRange) => {
+  const loadRewardStatus = useCallback(async (historyRange, { append = false } = {}) => {
+    const requestId = ++rewardStatusRequestIdRef.current;
+    rewardStatusAbortRef.current?.abort();
+    const controller = new AbortController();
+    rewardStatusAbortRef.current = controller;
+    const page = append ? rewardHistoryPageRef.current + 1 : 0;
+    if (!append) rewardHistoryPageRef.current = 0;
     setRewardLoading(true);
     setRewardError("");
     try {
       const end = new Date();
       const defaultStart = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6);
-      const from = historyRange?.from || localDateParam(defaultStart);
-      const to = historyRange?.to || localDateParam(end);
-      const status = await api(`/api/loyalty/status?qrToken=${encodeURIComponent(qrToken)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-      setRewardStatus(status);
+      const activeRange = append && rewardHistoryRangeRef.current
+        ? rewardHistoryRangeRef.current
+        : {
+          from: historyRange?.from || localDateParam(defaultStart),
+          to: historyRange?.to || localDateParam(end),
+        };
+      if (!append || !rewardHistoryRangeRef.current) rewardHistoryRangeRef.current = activeRange;
+      const { from, to } = activeRange;
+      const status = await api(`/api/loyalty/status?qrToken=${encodeURIComponent(qrToken)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&historyPage=${page}&historySize=20`, { signal: controller.signal });
+      if (requestId !== rewardStatusRequestIdRef.current) return;
+      if (append) {
+        setRewardStatus((current) => {
+          const currentTransactions = current?.transactions || [];
+          const currentIds = new Set(currentTransactions.map((transaction) => transaction.id));
+          const nextTransactions = (status.transactions || [])
+            .filter((transaction) => !currentIds.has(transaction.id));
+          return {
+            ...status,
+            transactions: [...currentTransactions, ...nextTransactions],
+          };
+        });
+      } else {
+        setRewardStatus(status);
+      }
+      rewardHistoryPageRef.current = page;
     } catch (err) {
-      if (err.status === 401) setRewardStatus((current) => ({ ...(current || {}), authenticated: false }));
-      setRewardError(err.message || "Could not load reward status.");
+      if (requestId === rewardStatusRequestIdRef.current && err.name !== "AbortError") {
+        if (err.status === 401) setRewardStatus((current) => ({ ...(current || {}), authenticated: false }));
+        setRewardError(err.message || "Could not load reward status.");
+      }
     } finally {
-      setRewardLoading(false);
+      if (requestId === rewardStatusRequestIdRef.current) {
+        setRewardLoading(false);
+        if (rewardStatusAbortRef.current === controller) rewardStatusAbortRef.current = null;
+      }
     }
+  }, [qrToken]);
+
+  useEffect(() => {
+    rewardStatusRequestIdRef.current += 1;
+    rewardStatusAbortRef.current?.abort();
+    rewardStatusAbortRef.current = null;
+    rewardHistoryPageRef.current = 0;
+    rewardHistoryRangeRef.current = null;
+    setRewardStatus(null);
+    setRewardError("");
+    setRewardLoading(false);
   }, [qrToken]);
 
   const openRewards = useCallback(() => {
@@ -1530,6 +1585,7 @@ export default function CustomerMenu() {
               loading={rewardLoading}
               error={rewardError}
               onManualRefresh={loadRewardStatus}
+              onLoadMore={() => loadRewardStatus(undefined, { append: true })}
               onUseReward={(rewardId) => {
                 setSelectedRewardId(String(rewardId));
                 setActiveNavTab("menu");
