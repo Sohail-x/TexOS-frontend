@@ -435,6 +435,7 @@ export default function Dashboard({ authenticatedAccount = null }) {
         try {
           const response = await apiFetch(`${API_BASE}/api/announcements/active`, {
             signal: controller.signal,
+            cache: "no-store",
           });
           const data = await response.json().catch(() => null);
           if (controller.signal.aborted || !active) return false;
@@ -506,6 +507,20 @@ export default function Dashboard({ authenticatedAccount = null }) {
     };
   }, [announcementSeenStorageKey]);
 
+  useEffect(() => {
+    const refreshVisibleAnnouncements = () => {
+      if (document.visibilityState === "visible") {
+        refreshAnnouncementsRef.current?.();
+      }
+    };
+    const intervalId = window.setInterval(refreshVisibleAnnouncements, 30000);
+    document.addEventListener("visibilitychange", refreshVisibleAnnouncements);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshVisibleAnnouncements);
+    };
+  }, []);
+
   const dashboardTopics = [
     ...(restaurantId ? [{
       destination: `/topic/restaurants/${restaurantId}/dashboard-updates`,
@@ -547,7 +562,6 @@ export default function Dashboard({ authenticatedAccount = null }) {
           if (location.pathname === "/dashboard") loadOverview(true);
         },
       },
-      { intervalMs: 30000, callback: () => refreshAnnouncementsRef.current?.() },
     ],
   });
 
