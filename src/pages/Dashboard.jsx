@@ -130,16 +130,22 @@ function MetricCard({ title, value, icon, note }) {
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ authenticatedAccount = null }) {
   const restaurantId = useActiveRestaurantId();
-  const [restaurants, setRestaurants] = useState([]);
+  const [restaurants, setRestaurants] = useState(
+    () => authenticatedAccount?.restaurants || [],
+  );
   const [owner, setOwner] = useState(() => {
+    if (authenticatedAccount) return authenticatedAccount.owner || authenticatedAccount;
     try { return JSON.parse(localStorage.getItem("texos-owner") || "null"); } catch { return null; }
   });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [summary, setSummary] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [activeOrders, setActiveOrders] = useState([]);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [recentOrdersLoading, setRecentOrdersLoading] = useState(true);
+  const [activeOrdersLoading, setActiveOrdersLoading] = useState(true);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [overviewError, setOverviewError] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -154,9 +160,14 @@ export default function Dashboard() {
   const activeAnnouncementPopup = useRef(null);
   const paymentNotificationRef = useRef(null);
   const paymentNotificationLoadInFlight = useRef(false);
+  const paymentNotificationRefreshPendingRef = useRef(false);
   const paymentNotificationRequestRef = useRef(null);
+  const paymentNotificationLoaderRef = useRef(null);
   const overviewRequestRef = useRef(null);
+  const overviewRefreshPendingRef = useRef(false);
+  const overviewLoaderRef = useRef(null);
   const announcementRequestRef = useRef(null);
+  const announcementRefreshPendingRef = useRef(false);
   const liveConnectedRef = useRef(false);
   const refreshAnnouncementsRef = useRef(null);
   const overviewRefreshTimer = useRef(null);
@@ -183,84 +194,119 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadOwnerContext() {
-      try {
-        const response = await apiFetch(`${API_BASE}/api/auth/me`);
-        if (!response.ok) throw new Error(`Unable to load account (HTTP ${response.status})`);
-        const data = await response.json();
-        if (cancelled) return;
-        const account = data.owner || data;
-        const ownedRestaurants = data.restaurants || account.restaurants || [];
-        setOwner(account);
-        setRestaurants(ownedRestaurants);
-        localStorage.setItem("texos-owner", JSON.stringify({
-          ownerId: account.ownerId ?? account.id,
-          fullName: account.fullName,
-          email: account.email,
-          phone: account.phone,
-          avatarIcon: account.avatarIcon,
-          avatarImage: account.avatarImage,
-        }));
-        const current = localStorage.getItem("texos-active-restaurant");
-        if (!current || !ownedRestaurants.some((r) => String(r.restaurantId ?? r.id) === String(current))) {
-          setActiveRestaurantId(ownedRestaurants[0]?.restaurantId ?? ownedRestaurants[0]?.id ?? "");
-        }
-      } catch (error) {
-        setOverviewError(error.message || "Could not load your restaurant account.");
+    if (!authenticatedAccount) return;
+    const applyOwnerContext = (data) => {
+      const account = data.owner || data;
+      const ownedRestaurants = data.restaurants || account.restaurants || [];
+      setOwner(account);
+      setRestaurants(ownedRestaurants);
+      localStorage.setItem("texos-owner", JSON.stringify({
+        ownerId: account.ownerId ?? account.id,
+        fullName: account.fullName,
+        email: account.email,
+        phone: account.phone,
+        avatarIcon: account.avatarIcon,
+        avatarImage: account.avatarImage,
+      }));
+      const current = localStorage.getItem("texos-active-restaurant");
+      if (!current || !ownedRestaurants.some(
+        (restaurant) => String(restaurant.restaurantId ?? restaurant.id) === String(current),
+      )) {
+        setActiveRestaurantId(
+          ownedRestaurants[0]?.restaurantId ?? ownedRestaurants[0]?.id ?? "",
+        );
       }
-    }
-    loadOwnerContext();
-    return () => { cancelled = true; };
-  }, []);
+    };
 
-  const loadOverview = useCallback(async (quiet = false) => {
+    applyOwnerContext(authenticatedAccount);
+  }, [authenticatedAccount]);
+
+  const loadOverview = useCallback(async (quiet = false, refreshIfBusy = false) => {
     if (!restaurantId) {
       setSummary(null); setRecentOrders([]); setActiveOrders([]);
+      setSummaryLoading(false);
+      setRecentOrdersLoading(false);
+      setActiveOrdersLoading(false);
       setLoadingOverview(false);
       return;
     }
-    if (overviewRequestRef.current) return;
+    if (overviewRequestRef.current) {
+      if (refreshIfBusy) overviewRefreshPendingRef.current = true;
+      return;
+    }
     const controller = new AbortController();
     overviewRequestRef.current = controller;
-    if (!quiet) setLoadingOverview(true);
+    if (!quiet) {
+      setLoadingOverview(true);
+      setSummaryLoading(true);
+      setRecentOrdersLoading(true);
+      setActiveOrdersLoading(true);
+    }
     setOverviewError("");
     try {
       const base = `${API_BASE}/api/restaurants/${restaurantId}/dashboard`;
-      const requests = await Promise.allSettled([
-        apiFetch(`${base}/summary`, { signal: controller.signal }),
-        apiFetch(`${base}/recent-orders`, { signal: controller.signal }),
-        apiFetch(`${base}/active-orders`, { signal: controller.signal }),
-      ]);
+      const loadSection = async (path, onLoaded, onComplete) => {
+        try {
+          const response = await apiFetch(`${base}/${path}`, { signal: controller.signal });
+          if (!response.ok) {
+            throw new Error(`Dashboard API returned HTTP ${response.status}`);
+          }
+          const data = await response.json();
+          if (controller.signal.aborted) return { ok: false, aborted: true };
+          onLoaded(data);
+          return { ok: true };
+        } catch (error) {
+          return controller.signal.aborted
+            ? { ok: false, aborted: true }
+            : { ok: false, error };
+        } finally {
+          if (!controller.signal.aborted) onComplete();
+        }
+      };
 
-      const results = await Promise.all(requests.map(async (result) => {
-        if (result.status !== "fulfilled") throw result.reason;
-        const response = result.value;
-        if (!response.ok) throw new Error(`Dashboard API returned HTTP ${response.status}`);
-        return response.json();
-      }).map((promise) => promise.catch((error) => ({ __error: error.message }))));
+      const results = await Promise.all([
+        loadSection(
+          "summary",
+          (data) => setSummary(data?.summary || data?.data || data),
+          () => setSummaryLoading(false),
+        ),
+        loadSection(
+          "recent-orders",
+          (data) => setRecentOrders(unwrapList(data)),
+          () => setRecentOrdersLoading(false),
+        ),
+        loadSection(
+          "active-orders",
+          (data) => setActiveOrders(unwrapList(data)),
+          () => setActiveOrdersLoading(false),
+        ),
+      ]);
       if (controller.signal.aborted) return;
 
-      const [summaryData, recentData, activeData] = results;
-      if (!summaryData?.__error) setSummary(summaryData?.summary || summaryData?.data || summaryData);
-      if (!recentData?.__error) setRecentOrders(unwrapList(recentData));
-      if (!activeData?.__error) setActiveOrders(unwrapList(activeData));
-
-      const errors = results.filter((item) => item?.__error).map((item) => item.__error);
-      if (errors.length === 3) setOverviewError("Could not load dashboard data. Check that the backend is running and the restaurant ID is correct.");
-      else if (errors.length) setOverviewError("Some dashboard sections could not be loaded. Check the backend response.");
+      const errors = results.filter((result) => !result.ok && !result.aborted);
+      if (errors.length === 3) {
+        setOverviewError("Could not load dashboard data. Check that the backend is running and the restaurant ID is correct.");
+      } else if (errors.length) {
+        setOverviewError("Some dashboard sections could not be loaded. Check the backend response.");
+      }
     } finally {
       if (overviewRequestRef.current === controller) {
         overviewRequestRef.current = null;
         if (!controller.signal.aborted) setLoadingOverview(false);
+        if (!controller.signal.aborted && overviewRefreshPendingRef.current) {
+          overviewRefreshPendingRef.current = false;
+          Promise.resolve().then(() => overviewLoaderRef.current?.(true));
+        }
       }
     }
   }, [restaurantId]);
 
-  const loadNextPaymentNotification = useCallback(async () => {
-    if (!restaurantId
-      || paymentNotificationRef.current?.restaurantId === String(restaurantId)
-      || paymentNotificationLoadInFlight.current) return;
+  const loadNextPaymentNotification = useCallback(async (refreshIfBusy = false) => {
+    if (!restaurantId || paymentNotificationRef.current?.restaurantId === String(restaurantId)) return;
+    if (paymentNotificationLoadInFlight.current) {
+      if (refreshIfBusy) paymentNotificationRefreshPendingRef.current = true;
+      return;
+    }
     paymentNotificationLoadInFlight.current = true;
     const controller = new AbortController();
     paymentNotificationRequestRef.current = controller;
@@ -286,14 +332,37 @@ export default function Dashboard() {
       if (paymentNotificationRequestRef.current === controller) {
         paymentNotificationRequestRef.current = null;
         paymentNotificationLoadInFlight.current = false;
+        if (paymentNotificationRefreshPendingRef.current) {
+          paymentNotificationRefreshPendingRef.current = false;
+          Promise.resolve().then(() => paymentNotificationLoaderRef.current?.());
+        }
       }
     }
   }, [restaurantId]);
+
+  useEffect(() => {
+    overviewLoaderRef.current = loadOverview;
+    return () => {
+      if (overviewLoaderRef.current === loadOverview) {
+        overviewLoaderRef.current = null;
+      }
+    };
+  }, [loadOverview]);
+
+  useEffect(() => {
+    paymentNotificationLoaderRef.current = loadNextPaymentNotification;
+    return () => {
+      if (paymentNotificationLoaderRef.current === loadNextPaymentNotification) {
+        paymentNotificationLoaderRef.current = null;
+      }
+    };
+  }, [loadNextPaymentNotification]);
 
   useEffect(() => () => {
     paymentNotificationRequestRef.current?.abort();
     paymentNotificationRequestRef.current = null;
     paymentNotificationLoadInFlight.current = false;
+    paymentNotificationRefreshPendingRef.current = false;
   }, [restaurantId]);
 
   const scheduleOverviewRefresh = useCallback(() => {
@@ -302,7 +371,7 @@ export default function Dashboard() {
     }
     overviewRefreshTimer.current = window.setTimeout(() => {
       overviewRefreshTimer.current = null;
-      if (location.pathname === "/dashboard") loadOverview(true);
+      if (location.pathname === "/dashboard") loadOverview(true, true);
     }, 120);
   }, [loadOverview, location.pathname]);
 
@@ -327,6 +396,7 @@ export default function Dashboard() {
       active = false;
       overviewRequestRef.current?.abort();
       overviewRequestRef.current = null;
+      overviewRefreshPendingRef.current = false;
     };
   }, [location.pathname, restaurantId, loadOverview]);
 
@@ -346,64 +416,92 @@ export default function Dashboard() {
   useEffect(() => {
     let active = true;
     seenAnnouncementIds.current = loadSeenAnnouncementIds(announcementSeenStorageKey);
-    const pollAnnouncements = async () => {
-      if (announcementRequestRef.current) return;
-      const controller = new AbortController();
-      announcementRequestRef.current = controller;
-      try {
-        const response = await apiFetch(`${API_BASE}/api/announcements/active`, {
-          signal: controller.signal,
-        });
-        const data = await response.json().catch(() => null);
-        if (controller.signal.aborted) return;
-        if (!response.ok) throw new Error(data?.message || `Could not load notifications (HTTP ${response.status}).`);
-        if (!active) return;
-        setNotificationsError("");
-        const currentAnnouncements = Array.isArray(data) ? data : [];
-        setAnnouncements(currentAnnouncements);
-        const currentIds = new Set(
-          currentAnnouncements.map((announcement) => String(announcement.id)),
-        );
-        seenAnnouncementIds.current.forEach((id) => {
-          if (!currentIds.has(id)) seenAnnouncementIds.current.delete(id);
-        });
-        const freshAnnouncements = currentAnnouncements.filter(
-          (announcement) => !seenAnnouncementIds.current.has(String(announcement.id)),
-        );
-        freshAnnouncements.forEach((announcement) =>
-          seenAnnouncementIds.current.add(String(announcement.id)));
+    const pollAnnouncements = async (showLoading = false) => {
+      if (announcementRequestRef.current) {
+        const inFlightRequest = announcementRequestRef.current;
+        if (!showLoading) announcementRefreshPendingRef.current = true;
+        if (showLoading) setNotificationsLoading(true);
         try {
-          localStorage.setItem(
-            announcementSeenStorageKey,
-            JSON.stringify([...seenAnnouncementIds.current]),
+          return await inFlightRequest.promise;
+        } finally {
+          if (showLoading) setNotificationsLoading(false);
+        }
+      }
+      const controller = new AbortController();
+      const request = { controller, promise: null };
+      announcementRequestRef.current = request;
+      if (showLoading) setNotificationsLoading(true);
+      request.promise = (async () => {
+        try {
+          const response = await apiFetch(`${API_BASE}/api/announcements/active`, {
+            signal: controller.signal,
+          });
+          const data = await response.json().catch(() => null);
+          if (controller.signal.aborted || !active) return false;
+          if (!response.ok) {
+            throw new Error(data?.message || `Could not load notifications (HTTP ${response.status}).`);
+          }
+          setNotificationsError("");
+          const currentAnnouncements = Array.isArray(data) ? data : [];
+          setAnnouncements(currentAnnouncements);
+          const currentIds = new Set(
+            currentAnnouncements.map((announcement) => String(announcement.id)),
           );
-        } catch (storageError) {
-          console.error("Could not persist seen announcement IDs.", storageError);
+          seenAnnouncementIds.current.forEach((id) => {
+            if (!currentIds.has(id)) seenAnnouncementIds.current.delete(id);
+          });
+          const freshAnnouncements = currentAnnouncements.filter(
+            (announcement) => !seenAnnouncementIds.current.has(String(announcement.id)),
+          );
+          freshAnnouncements.forEach((announcement) =>
+            seenAnnouncementIds.current.add(String(announcement.id)));
+          try {
+            localStorage.setItem(
+              announcementSeenStorageKey,
+              JSON.stringify([...seenAnnouncementIds.current]),
+            );
+          } catch (storageError) {
+            console.error("Could not persist seen announcement IDs.", storageError);
+          }
+          if (freshAnnouncements.length > 0) {
+            if (!activeAnnouncementPopup.current) {
+              activeAnnouncementPopup.current = freshAnnouncements[0];
+              setAnnouncementPopup(freshAnnouncements[0]);
+              setAnnouncementQueue((queue) => [...queue, ...freshAnnouncements.slice(1)]);
+            } else {
+              setAnnouncementQueue((queue) => [...queue, ...freshAnnouncements]);
+            }
+          }
+          return true;
+        } catch (error) {
+          if (active && !controller.signal.aborted) {
+            setNotificationsError(error.message || "Could not load TexOS announcements.");
+          }
+          return false;
         }
-        if (freshAnnouncements.length === 0) return;
-        if (!activeAnnouncementPopup.current) {
-          activeAnnouncementPopup.current = freshAnnouncements[0];
-          setAnnouncementPopup(freshAnnouncements[0]);
-          setAnnouncementQueue((queue) => [...queue, ...freshAnnouncements.slice(1)]);
-        } else {
-          setAnnouncementQueue((queue) => [...queue, ...freshAnnouncements]);
-        }
-      } catch (error) {
-        if (active && !controller.signal.aborted) {
-          setNotificationsError(error.message || "Could not load TexOS announcements.");
-        }
+      })();
+      try {
+        return await request.promise;
       } finally {
-        if (announcementRequestRef.current === controller) {
+        if (announcementRequestRef.current === request) {
           announcementRequestRef.current = null;
+        }
+        if (showLoading) setNotificationsLoading(false);
+        if (active && announcementRefreshPendingRef.current) {
+          announcementRefreshPendingRef.current = false;
+          Promise.resolve().then(() => pollAnnouncements());
         }
       }
     };
     refreshAnnouncementsRef.current = pollAnnouncements;
-    pollAnnouncements();
+    Promise.resolve().then(() => {
+      if (active) pollAnnouncements();
+    });
     return () => {
       active = false;
-      announcementRequestRef.current?.abort();
+      announcementRequestRef.current?.controller.abort();
       announcementRequestRef.current = null;
+      announcementRefreshPendingRef.current = false;
       refreshAnnouncementsRef.current = null;
     };
   }, [announcementSeenStorageKey]);
@@ -413,9 +511,13 @@ export default function Dashboard() {
       destination: `/topic/restaurants/${restaurantId}/dashboard-updates`,
       onMessage: (event) => {
         if (event?.type === "PAYMENT_NOTIFICATIONS_CHANGED") {
-          loadNextPaymentNotification();
+          loadNextPaymentNotification(true);
+          scheduleOverviewRefresh();
+        } else if (event?.type === "WAITER_REQUEST_CHANGED") {
+          loadNextPaymentNotification(true);
+        } else if (event?.type === "ORDERS_CHANGED") {
+          scheduleOverviewRefresh();
         }
-        scheduleOverviewRefresh();
       },
     }] : []),
     {
@@ -434,7 +536,7 @@ export default function Dashboard() {
         return;
       }
       scheduleOverviewRefresh();
-      loadNextPaymentNotification();
+      loadNextPaymentNotification(true);
       refreshAnnouncementsRef.current?.();
     },
     fallbacks: [
@@ -504,10 +606,17 @@ export default function Dashboard() {
 
   const totalRevenue = firstValue(summary, ["totalRevenue", "todayRevenue", "revenue", "totalSales"]);
   const totalOrders = firstValue(summary, ["totalOrders", "todayOrders", "orderCount", "ordersCount"]);
-  const activeCount = firstValue(summary, ["activeOrders", "activeOrderCount"], activeOrders.length);
+  const summaryActiveCount = firstValue(summary, ["activeOrders", "activeOrderCount"]);
+  const activeCount = summaryActiveCount ?? activeOrders.length;
+  const activeCountLoading = summaryActiveCount === null
+    ? activeOrdersLoading
+    : summaryLoading && activeOrdersLoading;
   const pendingCount = firstValue(summary, ["pendingOrders", "pendingPaymentOrders", "pendingPayments"], null);
   const pendingFromOrders = activeOrders.filter((order) => String(order.paymentStatus || "").toUpperCase() === "PENDING").length;
   const displayedPending = pendingCount ?? pendingFromOrders;
+  const pendingCountLoading = pendingCount === null
+    ? activeOrdersLoading
+    : summaryLoading && activeOrdersLoading;
 
   async function toggleNotifications() {
     if (notificationsOpen) {
@@ -517,14 +626,9 @@ export default function Dashboard() {
     setNotificationsOpen(true);
     setNotificationsLoading(true);
     setNotificationsError("");
-    try {
-      const response = await apiFetch(`${API_BASE}/api/announcements/active`);
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.message || `Could not load notifications (HTTP ${response.status}).`);
-      setAnnouncements(Array.isArray(data) ? data : []);
-    } catch (error) {
-      setNotificationsError(error.message || "Could not load TexOS announcements.");
-    } finally {
+    if (refreshAnnouncementsRef.current) {
+      await refreshAnnouncementsRef.current(true);
+    } else {
       setNotificationsLoading(false);
     }
   }
@@ -653,16 +757,16 @@ export default function Dashboard() {
               {overviewError && <div role="alert" style={{ padding: "12px 15px", marginBottom: 16, borderRadius: 9, background: "#fff1f0", color: "#b42318", fontSize: 12 }}>{overviewError}</div>}
 
               <section className="db-metrics-grid" aria-label="Business summary">
-                <MetricCard title="Total revenue" value={loadingOverview ? "Loading..." : money(totalRevenue)} note="Paid orders only, as reported by backend" icon="wallet" />
-                <MetricCard title="Total orders" value={loadingOverview ? "Loading..." : (totalOrders ?? "—")} note="Order count from dashboard summary" icon="bag" />
-                <MetricCard title="Active orders" value={loadingOverview ? "Loading..." : activeCount} note="Orders currently in progress" icon="clock" />
-                <MetricCard title="Pending payments" value={loadingOverview ? "Loading..." : displayedPending} note="Orders awaiting payment" icon="receipt" />
+                <MetricCard title="Total revenue" value={summaryLoading ? "Loading..." : money(totalRevenue)} note="Paid orders only, as reported by backend" icon="wallet" />
+                <MetricCard title="Total orders" value={summaryLoading ? "Loading..." : (totalOrders ?? "—")} note="Order count from dashboard summary" icon="bag" />
+                <MetricCard title="Active orders" value={activeCountLoading ? "Loading..." : activeCount} note="Orders currently in progress" icon="clock" />
+                <MetricCard title="Pending payments" value={pendingCountLoading ? "Loading..." : displayedPending} note="Orders awaiting payment" icon="receipt" />
               </section>
 
               <section className="db-primary-grid">
                 <article className="db-panel db-orders-panel">
                   <div className="db-panel-heading"><div><h2>Recent orders</h2><p>Latest orders received by your restaurant.</p></div><button type="button" className="db-text-button" onClick={() => goTo("/dashboard/orders")}>View all <Icon name="arrow" size={14} /></button></div>
-                  {loadingOverview ? <p className="db-empty-state">Loading recent orders...</p> : recentOrders.length === 0 ? <p className="db-empty-state">No orders have been received yet.</p> : (
+                  {recentOrdersLoading ? <p className="db-empty-state">Loading recent orders...</p> : recentOrders.length === 0 ? <p className="db-empty-state">No orders have been received yet.</p> : (
                     <div className="db-table-wrap"><table className="db-orders-table">
                       <thead><tr><th>ORDER</th><th>ITEMS</th><th>TABLE</th><th>AMOUNT</th><th>STATUS</th></tr></thead>
                       <tbody>{recentOrders.slice(0, 5).map((order) => {
@@ -693,7 +797,7 @@ export default function Dashboard() {
                         <div><strong>{title}</strong><p>Order {shortOrderId(order.orderNumber, order.id)} · {order.tableNumber || "Table not specified"}</p><time>{dateLabel(order.updatedAt || order.createdAt)}</time></div>
                       </div>;
                     })}
-                    {!loadingOverview && recentOrders.length === 0 && <p className="db-empty-state">New order activity will appear here.</p>}
+                    {!recentOrdersLoading && recentOrders.length === 0 && <p className="db-empty-state">New order activity will appear here.</p>}
                   </div>
                 </article>
               </section>

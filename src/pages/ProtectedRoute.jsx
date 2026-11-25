@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { API_BASE } from "./restaurantApi";
 import { clearAuthSession } from "./authSession";
@@ -7,6 +7,9 @@ export default function ProtectedRoute({ children, onboarding = false }) {
   const location = useLocation();
   const [result, setResult] = useState({ state: "checking" });
   const [restaurantSelectionVersion, setRestaurantSelectionVersion] = useState(0);
+  const accountContextRef = useRef(null);
+  const accountTokenRef = useRef(null);
+  const accountSelectionVersionRef = useRef(null);
 
   useEffect(() => {
     const refresh = () => setRestaurantSelectionVersion((version) => version + 1);
@@ -20,6 +23,7 @@ export default function ProtectedRoute({ children, onboarding = false }) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     async function validate() {
       const token = localStorage.getItem("texos-token");
       if (!token) {
@@ -28,13 +32,27 @@ export default function ProtectedRoute({ children, onboarding = false }) {
       }
       try {
         const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-        const accountResponse = await fetch(`${API_BASE}/api/auth/me`, { headers });
-        if (!accountResponse.ok) {
-          if (accountResponse.status === 401) clearAuthSession();
-          setResult({ state: accountResponse.status === 401 ? "unauthenticated" : "error" });
-          return;
+        let account = accountContextRef.current;
+        const accountMustRefresh = !account
+          || accountTokenRef.current !== token
+          || accountSelectionVersionRef.current !== restaurantSelectionVersion;
+        if (accountMustRefresh) {
+          const accountResponse = await fetch(`${API_BASE}/api/auth/me`, {
+            headers,
+            signal: controller.signal,
+          });
+          if (cancelled) return;
+          if (!accountResponse.ok) {
+            if (accountResponse.status === 401) clearAuthSession();
+            setResult({ state: accountResponse.status === 401 ? "unauthenticated" : "error" });
+            return;
+          }
+          account = await accountResponse.json();
+          if (cancelled) return;
+          accountContextRef.current = account;
+          accountTokenRef.current = token;
+          accountSelectionVersionRef.current = restaurantSelectionVersion;
         }
-        const account = await accountResponse.json();
         const restaurants = account.restaurants || [];
         if (onboarding) {
           if (!restaurants.length) {
@@ -55,8 +73,9 @@ export default function ProtectedRoute({ children, onboarding = false }) {
         localStorage.setItem("texos-restaurants", JSON.stringify(restaurants));
         const statusResponse = await fetch(
           `${API_BASE}/api/subscriptions/status?restaurantId=${encodeURIComponent(restaurant.restaurantId)}`,
-          { headers },
+          { headers, signal: controller.signal },
         );
+        if (cancelled) return;
         if (!statusResponse.ok) {
           if (statusResponse.status === 401) clearAuthSession();
           setResult({ state: statusResponse.status === 401 ? "unauthenticated" : "error" });
@@ -64,13 +83,22 @@ export default function ProtectedRoute({ children, onboarding = false }) {
         }
         const status = await statusResponse.json();
         if (cancelled) return;
-        setResult({ state: status.entitled ? "allowed" : status.status === "EXPIRED" ? "expired" : "subscribe", status });
+        setResult({
+          state: status.entitled ? "allowed" : status.status === "EXPIRED" ? "expired" : "subscribe",
+          account,
+          status,
+        });
       } catch {
-        if (!cancelled) setResult({ state: "error" });
+        if (!cancelled && !controller.signal.aborted) setResult({ state: "error" });
       }
     }
-    validate();
-    return () => { cancelled = true; };
+    Promise.resolve().then(() => {
+      if (!cancelled) validate();
+    });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [location.pathname, onboarding, restaurantSelectionVersion]);
 
   if (result.state === "checking") return <main className="auth-container"><p>Checking your TexOS account…</p></main>;
@@ -88,5 +116,8 @@ export default function ProtectedRoute({ children, onboarding = false }) {
     return <Navigate to={`/plans?restaurantId=${encodeURIComponent(restaurantId || "")}`} replace />;
   }
   if (result.state === "error") return <main className="auth-container"><p role="alert">Could not verify your account with TexOS. Check your connection and try again.</p></main>;
+  if (!onboarding && isValidElement(children)) {
+    return cloneElement(children, { authenticatedAccount: result.account });
+  }
   return children;
 }
