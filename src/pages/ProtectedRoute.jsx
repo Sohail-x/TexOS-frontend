@@ -1,7 +1,10 @@
 import { cloneElement, isValidElement, useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { API_BASE } from "./restaurantApi";
-import { clearAuthSession } from "./authSession";
+import {
+  clearAuthSession,
+  consumeLoginSubscriptionStatus,
+} from "./authSession";
 
 export default function ProtectedRoute({ children, onboarding = false }) {
   const location = useLocation();
@@ -71,18 +74,21 @@ export default function ProtectedRoute({ children, onboarding = false }) {
           String(item.restaurantId) === String(selected)) || restaurants[0];
         localStorage.setItem("texos-active-restaurant", String(restaurant.restaurantId));
         localStorage.setItem("texos-restaurants", JSON.stringify(restaurants));
-        const statusResponse = await fetch(
-          `${API_BASE}/api/subscriptions/status?restaurantId=${encodeURIComponent(restaurant.restaurantId)}`,
-          { headers, signal: controller.signal },
-        );
-        if (cancelled) return;
-        if (!statusResponse.ok) {
-          if (statusResponse.status === 401) clearAuthSession();
-          setResult({ state: statusResponse.status === 401 ? "unauthenticated" : "error" });
-          return;
+        let status = consumeLoginSubscriptionStatus(token, restaurant.restaurantId);
+        if (!status) {
+          const statusResponse = await fetch(
+            `${API_BASE}/api/subscriptions/status?restaurantId=${encodeURIComponent(restaurant.restaurantId)}`,
+            { headers, signal: controller.signal },
+          );
+          if (cancelled) return;
+          if (!statusResponse.ok) {
+            if (statusResponse.status === 401) clearAuthSession();
+            setResult({ state: statusResponse.status === 401 ? "unauthenticated" : "error" });
+            return;
+          }
+          status = await statusResponse.json();
+          if (cancelled) return;
         }
-        const status = await statusResponse.json();
-        if (cancelled) return;
         setResult({
           state: status.entitled ? "allowed" : status.status === "EXPIRED" ? "expired" : "subscribe",
           account,

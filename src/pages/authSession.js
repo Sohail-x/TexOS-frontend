@@ -1,6 +1,10 @@
 import { API_BASE } from "./restaurantApi";
 
+const LOGIN_SUBSCRIPTION_HANDOFF_MAX_AGE_MS = 15_000;
+let loginSubscriptionHandoff = null;
+
 export function saveAuthSession(data) {
+  loginSubscriptionHandoff = null;
   localStorage.setItem("texos-token", data.token);
   localStorage.setItem("texos-owner", JSON.stringify({
     ownerId: data.ownerId,
@@ -15,6 +19,27 @@ export function saveAuthSession(data) {
   if (restaurants.length) {
     localStorage.setItem("texos-active-restaurant", String(restaurants[0].restaurantId));
   }
+}
+
+export function rememberLoginSubscriptionStatus(token, restaurantId, status) {
+  loginSubscriptionHandoff = {
+    token,
+    restaurantId: String(restaurantId),
+    status: { entitled: status.entitled, status: status.status },
+    checkedAt: Date.now(),
+  };
+}
+
+export function consumeLoginSubscriptionStatus(token, restaurantId) {
+  const handoff = loginSubscriptionHandoff;
+  loginSubscriptionHandoff = null;
+  if (!handoff
+      || handoff.token !== token
+      || handoff.restaurantId !== String(restaurantId)
+      || Date.now() - handoff.checkedAt > LOGIN_SUBSCRIPTION_HANDOFF_MAX_AGE_MS) {
+    return null;
+  }
+  return handoff.status;
 }
 
 export async function routeAfterAuth(data, navigate, planId = "") {
@@ -33,6 +58,7 @@ export async function routeAfterAuth(data, navigate, planId = "") {
     const subscription = await response.json();
     if (subscription.entitled) {
       localStorage.removeItem("texos-pending-plan-id");
+      rememberLoginSubscriptionStatus(data.token, restaurantId, subscription);
       navigate("/dashboard", { replace: true });
       return;
     }
@@ -48,6 +74,7 @@ export async function routeAfterAuth(data, navigate, planId = "") {
 }
 
 export function clearAuthSession() {
+  loginSubscriptionHandoff = null;
   for (const key of [
     "texos-token",
     "texos-owner",
