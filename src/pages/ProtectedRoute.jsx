@@ -13,6 +13,7 @@ export default function ProtectedRoute({ children, onboarding = false }) {
   const accountContextRef = useRef(null);
   const accountTokenRef = useRef(null);
   const accountSelectionVersionRef = useRef(null);
+  const subscriptionStatusCacheRef = useRef(null);
 
   useEffect(() => {
     const refresh = () => setRestaurantSelectionVersion((version) => version + 1);
@@ -75,6 +76,15 @@ export default function ProtectedRoute({ children, onboarding = false }) {
         localStorage.setItem("texos-active-restaurant", String(restaurant.restaurantId));
         localStorage.setItem("texos-restaurants", JSON.stringify(restaurants));
         let status = consumeLoginSubscriptionStatus(token, restaurant.restaurantId);
+        const cachedStatus = subscriptionStatusCacheRef.current;
+        if (!status
+            && cachedStatus
+            && cachedStatus.token === token
+            && String(cachedStatus.restaurantId) === String(restaurant.restaurantId)
+            && cachedStatus.selectionVersion === restaurantSelectionVersion
+            && Date.now() - cachedStatus.checkedAt < 60_000) {
+          status = cachedStatus.status;
+        }
         if (!status) {
           const statusResponse = await fetch(
             `${API_BASE}/api/subscriptions/status?restaurantId=${encodeURIComponent(restaurant.restaurantId)}`,
@@ -89,6 +99,13 @@ export default function ProtectedRoute({ children, onboarding = false }) {
           status = await statusResponse.json();
           if (cancelled) return;
         }
+        subscriptionStatusCacheRef.current = {
+          token,
+          restaurantId: String(restaurant.restaurantId),
+          selectionVersion: restaurantSelectionVersion,
+          status,
+          checkedAt: Date.now(),
+        };
         setResult({
           state: status.entitled ? "allowed" : status.status === "EXPIRED" ? "expired" : "subscribe",
           account,

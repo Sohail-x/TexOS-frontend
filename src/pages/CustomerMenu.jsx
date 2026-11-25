@@ -71,6 +71,40 @@ function normalizeMenu(data) {
   };
 }
 
+function WaiterRecallButton({ waiterRequest, waiterBusy, onRecall, onCooldownError }) {
+  const [now, setNow] = useState(() => Date.now());
+  const cooldownEnd = Date.parse(waiterRequest?.cooldownUntil || "");
+  const hasCooldown = Number.isFinite(cooldownEnd) && cooldownEnd > now;
+
+  useEffect(() => {
+    if (!Number.isFinite(cooldownEnd) || cooldownEnd <= Date.now()) return undefined;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [cooldownEnd]);
+
+  const remaining = hasCooldown ? Math.max(0, Math.ceil((cooldownEnd - now) / 1000)) : 0;
+  const label = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
+
+  return (
+    <button
+      type="button"
+      className={`cm-quick-action-btn cm-review-map-btn${remaining > 0 ? " cm-waiter-recall-waiting" : ""}`}
+      onClick={() => {
+        if (remaining > 0) {
+          onCooldownError();
+          return;
+        }
+        onRecall();
+      }}
+      disabled={waiterBusy}
+      aria-disabled={remaining > 0}
+      aria-label={remaining > 0 ? `Re-call waiter in ${label}` : "Re-call waiter"}
+    >
+      {waiterBusy ? "Re-calling…" : `Re-call Waiter${remaining > 0 ? ` (${label})` : ""}`}
+    </button>
+  );
+}
+
 function FoodImage({ src, name }) {
   const [failed, setFailed] = useState(false);
 
@@ -941,7 +975,6 @@ export default function CustomerMenu() {
   const [waiterRequest, setWaiterRequest] = useState(null);
   const [waiterBusy, setWaiterBusy] = useState(false);
   const [waiterError, setWaiterError] = useState("");
-  const [waiterClock, setWaiterClock] = useState(Date.now());
   const [customerPaymentHistory, setCustomerPaymentHistory] = useState([]);
   const [customerPaymentHistoryError, setCustomerPaymentHistoryError] = useState("");
 
@@ -1025,8 +1058,10 @@ export default function CustomerMenu() {
   }, [loadRewardStatus]);
 
   useEffect(() => {
-    if (checkoutOpen) loadRewardStatus();
-  }, [checkoutOpen, loadRewardStatus]);
+    if (checkoutOpen && menu?.rewardsEnabled && !rewardStatus && !rewardLoading) {
+      loadRewardStatus();
+    }
+  }, [checkoutOpen, loadRewardStatus, menu?.rewardsEnabled, rewardLoading, rewardStatus]);
 
   const restoreActiveOrder = useCallback(async () => {
     try {
@@ -1113,15 +1148,10 @@ export default function CustomerMenu() {
     }
   };
 
-  const waiterCooldownEnd = Date.parse(waiterRequest?.cooldownUntil || "");
-  const waiterCooldownRemaining = Number.isFinite(waiterCooldownEnd)
-    ? Math.max(0, Math.ceil((waiterCooldownEnd - waiterClock) / 1000))
-    : 0;
-  const waiterCooldownLabel = `${String(Math.floor(waiterCooldownRemaining / 60)).padStart(2, "0")}:${String(waiterCooldownRemaining % 60).padStart(2, "0")}`;
-
   const recallWaiter = async () => {
     if (!waiterRequest?.requestId || waiterRequest.status !== "PENDING" || waiterBusy) return;
-    if (waiterCooldownRemaining > 0) {
+    const cooldownEnd = Date.parse(waiterRequest?.cooldownUntil || "");
+    if (Number.isFinite(cooldownEnd) && cooldownEnd > Date.now()) {
       setWaiterError("Please wait 2 minutes before trying again.");
       return;
     }
@@ -1237,12 +1267,6 @@ export default function CustomerMenu() {
       window.clearInterval(interval);
     };
   }, [qrToken, waiterRequest?.requestId, waiterRequest?.status]);
-
-  useEffect(() => {
-    if (!waiterRequest?.requestId || waiterRequest.status !== "PENDING") return undefined;
-    const interval = window.setInterval(() => setWaiterClock(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [waiterRequest?.requestId, waiterRequest?.status]);
 
   const logoutCustomer = async () => {
     setCustomerLogoutBusy(true);
@@ -1659,18 +1683,12 @@ export default function CustomerMenu() {
                         : "Call Waiter"}
                   </button>
                   {waiterRequest?.status === "PENDING" && (
-                    <button
-                      type="button"
-                      className={`cm-quick-action-btn cm-review-map-btn${waiterCooldownRemaining > 0 ? " cm-waiter-recall-waiting" : ""}`}
-                      onClick={recallWaiter}
-                      disabled={waiterBusy}
-                      aria-disabled={waiterCooldownRemaining > 0}
-                      aria-label={waiterCooldownRemaining > 0
-                        ? `Re-call waiter in ${waiterCooldownLabel}`
-                        : "Re-call waiter"}
-                    >
-                      {waiterBusy ? "Re-calling…" : `Re-call Waiter${waiterCooldownRemaining > 0 ? ` (${waiterCooldownLabel})` : ""}`}
-                    </button>
+                    <WaiterRecallButton
+                      waiterRequest={waiterRequest}
+                      waiterBusy={waiterBusy}
+                      onRecall={recallWaiter}
+                      onCooldownError={() => setWaiterError("Please wait 2 minutes before trying again.")}
+                    />
                   )}
                 </div>
                 {waiterRequest?.status === "ASSIGNED" && (

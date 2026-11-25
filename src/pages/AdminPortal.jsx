@@ -79,10 +79,12 @@ export default function AdminPortal() {
       ]);
       setRestaurants(restaurantRows);
       setPlans((availablePlans || []).filter((plan) => !plan.trialPlan));
-      if (!selectedRestaurantId && restaurantRows.length) setSelectedRestaurantId(String(restaurantRows[0].restaurantId));
-      if (!selectedPlanId && availablePlans?.length) {
+      if (restaurantRows.length) {
+        setSelectedRestaurantId((current) => current || String(restaurantRows[0].restaurantId));
+      }
+      if (availablePlans?.length) {
         const paidPlan = availablePlans.find((plan) => !plan.trialPlan);
-        if (paidPlan) setSelectedPlanId(String(paidPlan.id));
+        if (paidPlan) setSelectedPlanId((current) => current || String(paidPlan.id));
       }
     } catch (requestError) {
       setSubscriptionsError(requestError.message || "Could not load restaurant subscriptions.");
@@ -93,7 +95,7 @@ export default function AdminPortal() {
     } finally {
       setSubscriptionsLoading(false);
     }
-  }, [token, selectedRestaurantId, selectedPlanId]);
+  }, [token]);
 
   useEffect(() => {
     let active = true;
