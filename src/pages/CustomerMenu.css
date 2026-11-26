@@ -1547,6 +1547,10 @@
   color: var(--cm-accent);
 }
 
+.tracker-live.complete {
+  color: #16803c;
+}
+
 .tracker-dot {
   width: 6px;
   height: 6px;

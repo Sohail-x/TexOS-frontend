@@ -461,6 +461,7 @@ function OrderTracker({ order, onBackToMenu, qrToken }) {
   };
 
   const status = liveOrder?.orderStatus || "NEW";
+  const trackingComplete = status === "SERVED";
   const approvalStatus = liveOrder?.approvalStatus || "NOT_REQUIRED";
   const awaitingApproval = approvalStatus === "PENDING";
   const approvalRejected = approvalStatus === "REJECTED";
@@ -550,9 +551,9 @@ function OrderTracker({ order, onBackToMenu, qrToken }) {
                 <span className="tracker-label">ORDER STATUS (Click Refresh button to see the latest order status)</span>
                 <h3>{status.replaceAll("_", " ")}</h3>
               </div>
-              <span className={`tracker-live ${connectionStatus === "CONNECTED" ? "online" : "offline"}`}>
-                <span className="tracker-dot"></span>
-                {connectionStatus === "CONNECTED" ? "LIVE" : "RECONNECTING"}
+              <span className={`tracker-live ${trackingComplete ? "complete" : connectionStatus === "CONNECTED" ? "online" : "offline"}`}>
+                {!trackingComplete && <span className="tracker-dot"></span>}
+                {trackingComplete ? "COMPLETE" : connectionStatus === "CONNECTED" ? "LIVE" : "RECONNECTING"}
               </span>
             </div>
 

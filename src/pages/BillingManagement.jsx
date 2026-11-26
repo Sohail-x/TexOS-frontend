@@ -43,7 +43,7 @@ export default function BillingManagement() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState("LAST_7_DAYS");
+  const [dateFilter, setDateFilter] = useState("TODAY");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [activeView, setActiveView] = useState("orders");
