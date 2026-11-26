@@ -435,6 +435,7 @@ export default function Dashboard({ authenticatedAccount = null }) {
         try {
           const response = await apiFetch(`${API_BASE}/api/announcements/active`, {
             signal: controller.signal,
+            cache: "no-store",
           });
           const data = await response.json().catch(() => null);
           if (controller.signal.aborted || !active) return false;
@@ -506,6 +507,20 @@ export default function Dashboard({ authenticatedAccount = null }) {
     };
   }, [announcementSeenStorageKey]);
 
+  useEffect(() => {
+    const refreshVisibleAnnouncements = () => {
+      if (document.visibilityState === "visible") {
+        refreshAnnouncementsRef.current?.();
+      }
+    };
+    const intervalId = window.setInterval(refreshVisibleAnnouncements, 30000);
+    document.addEventListener("visibilitychange", refreshVisibleAnnouncements);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshVisibleAnnouncements);
+    };
+  }, []);
+
   const dashboardTopics = [
     ...(restaurantId ? [{
       destination: `/topic/restaurants/${restaurantId}/dashboard-updates`,
@@ -547,7 +562,6 @@ export default function Dashboard({ authenticatedAccount = null }) {
           if (location.pathname === "/dashboard") loadOverview(true);
         },
       },
-      { intervalMs: 30000, callback: () => refreshAnnouncementsRef.current?.() },
     ],
   });
 
@@ -739,7 +753,11 @@ export default function Dashboard({ authenticatedAccount = null }) {
           }} /> : !restaurantId ? <section className="db-panel" style={{ padding: 28 }}><h2>No restaurant selected</h2><p>Your account does not currently have an active restaurant. Please complete restaurant setup or contact support.</p></section> : location.pathname === "/dashboard/support" ? <section className="db-panel" style={{ padding: 28, maxWidth: 620 }}><p className="db-eyebrow">TEXOS SUPPORT</p><h1>Need a hand?</h1><p>Usually reply within 2-3 hours.</p><div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 20 }}><a className="db-secondary-button" href="https://mail.google.com/mail/?view=cm&fs=1&to=texosservice%40gmail.com" target="_blank" rel="noreferrer">Email support</a><a className="db-secondary-button" href="https://wa.me/9749384032" target="_blank" rel="noreferrer">WhatsApp support</a></div></section> : location.pathname === "/dashboard/orders" ? <Orders /> : location.pathname === "/dashboard/kitchen" ? <KitchenDisplay /> : location.pathname === "/dashboard/menu" ? <MenuManagement key={restaurantId} /> : location.pathname === "/dashboard/tables" ? <TablesAndQR /> : location.pathname === "/dashboard/billing" ? <BillingManagement /> : location.pathname === "/dashboard/reports" ? <ReportsAnalytics /> : location.pathname === "/dashboard/customers" ? <Customers /> : location.pathname === "/dashboard/rewards" ? <RewardManagement restaurantId={restaurantId} /> : location.pathname === "/dashboard" ? (
             <>
               <section className="db-welcome-row">
-                <div><p className="db-eyebrow">RESTAURANT OVERVIEW</p><h1>Dashboard overview <span>✦</span></h1><p className="db-welcome-subtitle">Live business data from your Restaurant/Cafe.</p></div>
+          <div>
+              <p className="db-eyebrow">RESTAURANT OVERVIEW</p>
+                <h1>Dashboard overview <span>✦</span></h1>
+              <p className="db-welcome-subtitle">Live business data from your Restaurant/Cafe.</p>
+          </div>
                 <div className="db-overview-actions">
                   <button
                     type="button"

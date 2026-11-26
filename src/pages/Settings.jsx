@@ -38,6 +38,7 @@ export default function Settings({ owner, restaurants, activeRestaurantId, onOwn
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const avatarInputRef = useRef(null);
+  const kitchenPollInFlightRef = useRef(false);
 
   // Opening hours for the active restaurant – shown/edited in Owner Profile section
   const [openingHours, setOpeningHours] = useState(() => {
@@ -111,7 +112,11 @@ useEffect(() => {
   useEffect(() => {
     if (kitchenAccessStatus?.status !== "ACTIVE") return undefined;
     const timer = window.setInterval(() => {
-      loadKitchenAccessStatus();
+      if (kitchenPollInFlightRef.current) return;
+      kitchenPollInFlightRef.current = true;
+      Promise.resolve(loadKitchenAccessStatus()).finally(() => {
+        kitchenPollInFlightRef.current = false;
+      });
     }, 5000);
     return () => window.clearInterval(timer);
   }, [kitchenAccessStatus?.status, loadKitchenAccessStatus]);

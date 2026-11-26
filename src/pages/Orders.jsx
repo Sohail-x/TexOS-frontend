@@ -64,7 +64,7 @@ export default function Orders() {
 
     try {
       const response = await apiFetch(
-        `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders`,
+        `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders?page=0&size=100`,
         { headers: { Accept: "application/json" }, signal: controller.signal }
       );
 

@@ -27,6 +27,7 @@ function formatDate(value) {
 export default function ReportsAnalytics() {
   const restaurantId = useActiveRestaurantId();
   const [orders, setOrders] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [period, setPeriod] = useState("7");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,64 +37,65 @@ export default function ReportsAnalytics() {
     if (quiet) setRefreshing(true); else setLoading(true);
     setError("");
     try {
-      const response = await apiFetch(`${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders`, { headers: { Accept: "application/json" } });
+      const response = await apiFetch(
+        `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/dashboard/analytics?period=${encodeURIComponent(period)}`,
+        { headers: { Accept: "application/json" } }
+      );
       if (!response.ok) throw new Error(`Could not load report data (HTTP ${response.status}).`);
-      setOrders(getOrders(await response.json()));
+      const data = await response.json();
+      setAnalytics(data);
+      setOrders(getOrders(data));
     } catch (err) {
       setError(err.message || "Unable to load reports from the backend.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [restaurantId]);
+  }, [period, restaurantId]);
 
   useEffect(() => {
     let active = true;
-    let timer;
     Promise.resolve().then(() => {
       if (!active) return;
       if (!restaurantId) {
         setOrders([]);
+        setAnalytics(null);
         setLoading(false);
         return;
       }
       loadOrders();
-      timer = window.setInterval(() => loadOrders(true), 30000);
     });
     return () => {
       active = false;
-      if (timer) window.clearInterval(timer);
     };
   }, [loadOrders, restaurantId]);
 
-  const filtered = useMemo(() => {
-    if (period === "all") return orders;
-    const days = Number(period);
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - (days - 1));
-    return orders.filter((order) => {
-      const date = orderDate(order);
-      return date && date >= start && date <= new Date();
-    });
-  }, [orders, period]);
+  const filtered = orders;
 
   const stats = useMemo(() => {
-    const paid = filtered.filter((o) => String(o.paymentStatus || "").toUpperCase() === "PAID");
-    const revenue = paid.reduce((sum, order) => sum + amount(order), 0);
-    const pending = filtered.filter((o) => String(o.paymentStatus || "").toUpperCase() === "PENDING");
-    const cancelled = filtered.filter((o) => String(o.orderStatus || o.status || "").toUpperCase() === "CANCELLED");
-    const average = paid.length ? revenue / paid.length : 0;
-    const statusCounts = ["NEW", "ACCEPTED", "PREPARING", "READY", "SERVED", "CANCELLED"].map((status) => ({ status, count: filtered.filter((o) => String(o.orderStatus || o.status || "NEW").toUpperCase() === status).length }));
-    const itemMap = new Map();
-    filtered.forEach((order) => (order.items || []).forEach((item) => {
-      const name = item.itemName || item.menuItemName || "Unnamed item";
-      const quantity = Number(item.quantity || 0);
-      itemMap.set(name, (itemMap.get(name) || 0) + quantity);
-    }));
-    const topItems = [...itemMap.entries()].map(([name, quantity]) => ({ name, quantity })).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
-    return { revenue, total: filtered.length, paid: paid.length, pending: pending.length, cancelled: cancelled.length, average, statusCounts, topItems };
-  }, [filtered]);
+    if (!analytics) {
+      return {
+        revenue: 0,
+        total: 0,
+        paid: 0,
+        pending: 0,
+        cancelled: 0,
+        average: 0,
+        statusCounts: ["NEW", "ACCEPTED", "PREPARING", "READY", "SERVED", "CANCELLED"].map((status) => ({ status, count: 0 })),
+        topItems: [],
+      };
+    }
+    return {
+      revenue: Number(analytics.revenue || 0),
+      total: Number(analytics.total || 0),
+      paid: Number(analytics.paid || 0),
+      pending: Number(analytics.pending || 0),
+      cancelled: Number(analytics.cancelled || 0),
+      average: Number(analytics.average || 0),
+      statusCounts: Array.isArray(analytics.statusCounts) ? analytics.statusCounts : [],
+      topItems: Array.isArray(analytics.topItems) ? analytics.topItems : [],
+    };
+  }, [analytics]);
 
   function exportCsv() {
     const rows = [["Order Number", "Date", "Table", "Order Status", "Payment Status", "Amount"], ...filtered.map((o) => [shortOrderId(o.orderNumber, o.id), o.createdAt || "", o.tableNumber || o.table?.tableNumber || "", o.orderStatus || o.status || "", o.paymentStatus || "", amount(o)])];

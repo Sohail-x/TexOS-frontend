@@ -78,7 +78,7 @@ export default function BillingManagement() {
     setLoading(true);
     setError("");
     try {
-      const response = await apiFetch(`${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders`, { headers: { Accept: "application/json" } });
+      const response = await apiFetch(`${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders?page=0&size=100`, { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error(`Could not load orders (HTTP ${response.status}).`);
       setOrders(listFrom(await response.json()));
     } catch (err) {

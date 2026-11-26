@@ -24,6 +24,13 @@ async function adminRequest(path, token, options = {}) {
 export default function AdminPortal() {
   const navigate = useNavigate();
   const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) || "");
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("texos-theme") || "light";
+    } catch {
+      return "light";
+    }
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [announcements, setAnnouncements] = useState([]);
@@ -40,6 +47,24 @@ export default function AdminPortal() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    try {
+      localStorage.setItem("texos-theme", nextTheme);
+    } catch (storageError) {
+      console.error("Could not persist the admin theme preference.", storageError);
+    }
+  }
+
+  const themeToggle = <button
+    type="button"
+    className="admin-theme-toggle"
+    aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+    title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+    onClick={toggleTheme}
+  >{theme === "dark" ? "☀" : "☾"}</button>;
+
   const filteredRestaurants = restaurants.filter((restaurant) => {
     const query = restaurantSearch.trim().toLowerCase();
     return !query
@@ -79,10 +104,12 @@ export default function AdminPortal() {
       ]);
       setRestaurants(restaurantRows);
       setPlans((availablePlans || []).filter((plan) => !plan.trialPlan));
-      if (!selectedRestaurantId && restaurantRows.length) setSelectedRestaurantId(String(restaurantRows[0].restaurantId));
-      if (!selectedPlanId && availablePlans?.length) {
+      if (restaurantRows.length) {
+        setSelectedRestaurantId((current) => current || String(restaurantRows[0].restaurantId));
+      }
+      if (availablePlans?.length) {
         const paidPlan = availablePlans.find((plan) => !plan.trialPlan);
-        if (paidPlan) setSelectedPlanId(String(paidPlan.id));
+        if (paidPlan) setSelectedPlanId((current) => current || String(paidPlan.id));
       }
     } catch (requestError) {
       setSubscriptionsError(requestError.message || "Could not load restaurant subscriptions.");
@@ -93,7 +120,7 @@ export default function AdminPortal() {
     } finally {
       setSubscriptionsLoading(false);
     }
-  }, [token, selectedRestaurantId, selectedPlanId]);
+  }, [token]);
 
   useEffect(() => {
     let active = true;
@@ -216,7 +243,8 @@ export default function AdminPortal() {
   }
 
   if (!token) {
-    return <main className="admin-login-page">
+    return <main className="admin-login-page" data-theme={theme}>
+      {themeToggle}
       <form className="admin-login-card" onSubmit={login}>
         <span className="admin-brand-mark">T</span>
         <p className="admin-eyebrow">TEXOS ADMINISTRATION</p>
@@ -230,8 +258,8 @@ export default function AdminPortal() {
     </main>;
   }
 
-  return <main className="admin-page">
-    <header className="admin-header"><div><span className="admin-brand-mark">T</span><div><p className="admin-eyebrow">TEXOS PLATFORM</p><h1>Welcome Admin, Md Sohail (Founder of TexOS)</h1></div></div><button type="button" className="admin-secondary-button" onClick={logout}>Sign out</button></header>
+  return <main className="admin-page" data-theme={theme}>
+    <header className="admin-header"><div><span className="admin-brand-mark">T</span><div><p className="admin-eyebrow">TEXOS PLATFORM</p><h1>Welcome Admin, Md Sohail (Founder of TexOS)</h1></div></div><div className="admin-header-actions">{themeToggle}<button type="button" className="admin-secondary-button" onClick={logout}>Sign out</button></div></header>
     {error && <div className="admin-alert error" role="alert">{error}</div>}
     {notice && <div className="admin-alert success" role="status">{notice}</div>}
     <section className="admin-card">
