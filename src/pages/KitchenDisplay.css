@@ -4,5 +4,5 @@
 .texos-dashboard[data-theme="dark"] .kitchen-filter-panel label{color:#d4e4e9}
 .texos-dashboard[data-theme="dark"] .kitchen-filter-panel select{background:#102a37;border-color:#315767;color:#e8f3f6;color-scheme:dark}
 .texos-dashboard[data-theme="dark"] .kitchen-filter-panel button{color:#64d9c8}
-.kitchen-status-filter{border:1px solid #dce5e8;border-radius:9px;padding:10px 12px;background:#fff;color:#33434b;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.kitchen-status-filter{border:1px solid #dce5e8;border-radius:9px;padding:14px 5px;background:#fff;color:#33434b;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .texos-dashboard[data-theme="dark"] .kitchen-status-filter{color-scheme:dark}

@@ -11,6 +11,7 @@ const footerGroups = [
       ["Help & Support", "/support"],
       ["Kitchen Staff Access", "/kitchen-staff"],
       ["Order Approval Staff", "/order-approval"],
+      ["TexOS Admin", "/texos-admin"],
     ],
   },
   {
