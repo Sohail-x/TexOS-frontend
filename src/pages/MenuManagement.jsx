@@ -46,7 +46,58 @@ export default function MenuManagement() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const itemImageInputRef = useRef(null);
 
-  function uploadItemImage(event) {
+function compressMenuImage(file) {
+    return new Promise((resolve, reject) => {
+      // Keep GIFs untouched so animations are preserved
+      if (file.type === "image/gif") {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Could not read image."));
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const maxDim = 600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas not supported."));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const webpDataUrl = canvas.toDataURL("image/webp", 0.8);
+        const dataUrl = webpDataUrl.startsWith("data:image/webp")
+          ? webpDataUrl
+          : canvas.toDataURL("image/jpeg", 0.82);
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Invalid image file."));
+      };
+      img.src = objectUrl;
+    });
+  }
+
+  async function uploadItemImage(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.match(/^image\/(png|jpeg|webp|gif)$/)) {
@@ -54,17 +105,19 @@ export default function MenuManagement() {
       event.target.value = "";
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setError("Menu image must be 2 MB or smaller.");
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Menu image must be 5 MB or smaller.");
       event.target.value = "";
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setItemForm((current) => current ? { ...current, imageUrl: String(reader.result) } : current);
+    try {
+      const compressedDataUrl = await compressMenuImage(file);
+      setItemForm((current) => (current ? { ...current, imageUrl: compressedDataUrl } : current));
       setError("");
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setError("Could not process this image. Please try another file.");
+      event.target.value = "";
+    }
   }
 
   const loadMenu = useCallback(async () => {
