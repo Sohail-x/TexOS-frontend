@@ -439,11 +439,19 @@ function CheckoutModal({ cart, subtotal, tableNumber, onClose, onPlaceOrder, pla
   );
 }
 
-function OrderTracker({ order, onBackToMenu, qrToken }) {
+function OrderTracker({ order, onBackToMenu, onOrderUpdated, qrToken }) {
   const [liveOrder, setLiveOrder] = useState(order);
+  const liveOrderRef = useRef(order);
   const [connectionStatus, setConnectionStatus] = useState("CONNECTING");
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+
+  const applyOrderUpdate = useCallback((updates) => {
+    const updatedOrder = { ...liveOrderRef.current, ...updates };
+    liveOrderRef.current = updatedOrder;
+    setLiveOrder(updatedOrder);
+    onOrderUpdated(updatedOrder);
+  }, [onOrderUpdated]);
 
   const refreshOrder = async () => {
     if (!liveOrder?.orderNumber || !qrToken) return;
@@ -454,7 +462,7 @@ function OrderTracker({ order, onBackToMenu, qrToken }) {
       const latest = Array.isArray(rows)
         ? rows.find((entry) => String(entry.orderNumber) === String(liveOrder.orderNumber))
         : null;
-      if (latest) setLiveOrder((current) => ({ ...current, ...latest }));
+      if (latest) applyOrderUpdate(latest);
       else setRefreshError("This order could not be refreshed. Please try again.");
     } catch (error) {
       setRefreshError(error.message || "Could not refresh order status.");
@@ -488,7 +496,7 @@ function OrderTracker({ order, onBackToMenu, qrToken }) {
         client.subscribe(`/topic/orders/${liveOrder.orderNumber}`, (message) => {
           try {
             const updatedOrder = JSON.parse(message.body);
-            setLiveOrder((current) => ({ ...current, ...updatedOrder }));
+            applyOrderUpdate(updatedOrder);
           } catch (error) {
             console.error("Invalid order update:", error);
           }
@@ -506,7 +514,7 @@ function OrderTracker({ order, onBackToMenu, qrToken }) {
     return () => {
       client.deactivate();
     };
-  }, [liveOrder?.orderNumber]);
+  }, [applyOrderUpdate, liveOrder?.orderNumber]);
 
   const cancelled = status === "CANCELLED" || approvalRejected;
 
@@ -1047,6 +1055,11 @@ export default function CustomerMenu() {
   const [orderError, setOrderError] = useState("");
   const [completedOrder, setCompletedOrder] = useState(null);
   const [orderTrackingError, setOrderTrackingError] = useState("");
+  const syncCompletedOrder = useCallback((updatedOrder) => {
+    setCompletedOrder((current) => current?.orderNumber === updatedOrder.orderNumber
+      ? { ...current, ...updatedOrder }
+      : updatedOrder);
+  }, []);
 
   const [billOpen, setBillOpen] = useState(false);
   const [customerBill, setCustomerBill] = useState(null);
@@ -1772,6 +1785,7 @@ export default function CustomerMenu() {
                 key={completedOrder.orderNumber}
                 order={completedOrder}
                 onBackToMenu={() => setActiveNavTab("menu")}
+                onOrderUpdated={syncCompletedOrder}
                 qrToken={qrToken}
               />
             ) : (

@@ -70,7 +70,7 @@ export default function Orders() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [paymentFilter, setPaymentFilter] = useState("ALL");
-  const [dateFilter, setDateFilter] = useState("1");
+  const [dateFilter, setDateFilter] = useState("ALL");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);

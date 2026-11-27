@@ -246,3 +246,47 @@
 .texos-dashboard[data-theme="dark"] .menu-form-modal,.texos-dashboard[data-theme="dark"] .menu-import-modal{background:#17313f!important;color:#e8f3f6}.texos-dashboard[data-theme="dark"] .menu-modal-heading{border-bottom-color:#284858}.texos-dashboard[data-theme="dark"] .menu-modal-heading h2,.texos-dashboard[data-theme="dark"] .menu-form label{color:#e8f3f6!important}.texos-dashboard[data-theme="dark"] .menu-modal-heading>button{background:#102a37;color:#e8f3f6}.texos-dashboard[data-theme="dark"] .menu-form input,.texos-dashboard[data-theme="dark"] .menu-form textarea,.texos-dashboard[data-theme="dark"] .menu-form select{background:#102a37!important;border-color:#315767!important;color:#e8f3f6!important}.texos-dashboard[data-theme="dark"] .menu-form input::placeholder,.texos-dashboard[data-theme="dark"] .menu-form textarea::placeholder{color:#8faab4}.texos-dashboard[data-theme="dark"] .menu-form select,.texos-dashboard[data-theme="dark"] .db-header-restaurant-select{color-scheme:dark}.texos-dashboard[data-theme="dark"] .menu-form-actions .menu-btn-light,.texos-dashboard[data-theme="dark"] .menu-item-image-upload .menu-btn-light{background:#102a37!important;border-color:#315767!important;color:#e8f3f6!important}.texos-dashboard[data-theme="dark"] .db-header-restaurant-select option{background:#17313f;color:#e8f3f6}.texos-dashboard[data-theme="dark"] .menu-form-modal::-webkit-scrollbar-thumb{background:#315767;border-radius:99px}
 .texos-dashboard[data-theme="dark"] .bill-modal{background:#17313f!important;color:#e8f3f6}.texos-dashboard[data-theme="dark"] .bill-modal-close{background:#102a37;color:#e8f3f6}.texos-dashboard[data-theme="dark"] .bill-receipt-head,.texos-dashboard[data-theme="dark"] .bill-receipt-foot{border-color:#315767}.texos-dashboard[data-theme="dark"] .bill-receipt-head h2,.texos-dashboard[data-theme="dark"] .bill-receipt-items th,.texos-dashboard[data-theme="dark"] .bill-receipt-items td,.texos-dashboard[data-theme="dark"] .bill-receipt-meta strong,.texos-dashboard[data-theme="dark"] .bill-receipt-totals strong,.texos-dashboard[data-theme="dark"] .bill-receipt-totals .bill-grand-total{color:#edf8fb!important}.texos-dashboard[data-theme="dark"] .bill-receipt-head p,.texos-dashboard[data-theme="dark"] .bill-receipt-meta,.texos-dashboard[data-theme="dark"] .bill-receipt-totals p,.texos-dashboard[data-theme="dark"] .bill-receipt-foot{color:#b7cbd3!important}.texos-dashboard[data-theme="dark"] .bill-receipt-items th,.texos-dashboard[data-theme="dark"] .bill-receipt-items td,.texos-dashboard[data-theme="dark"] .bill-receipt-totals .bill-grand-total{border-color:#315767!important}.texos-dashboard[data-theme="dark"] .bill-modal::-webkit-scrollbar-thumb{background:#315767;border-radius:99px}
 @media print{.texos-dashboard[data-theme="dark"] .bill-modal{background:#fff!important;color:#17212f!important}.texos-dashboard[data-theme="dark"] .bill-modal *{color:#17212f!important;border-color:#d9e0e6!important}}
+
+/* Desktop + Mobile: Sidebar by default hidden, hamburger button se open hoga */
+.texos-dashboard {
+  display: block;
+}
+
+.db-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 258px;
+  min-height: 100dvh;
+  transform: translateX(-105%);
+  transition: transform 0.22s ease;
+  box-shadow: 20px 0 60px rgba(0, 0, 0, 0.35);
+}
+
+.db-sidebar.db-sidebar-open {
+  transform: translateX(0);
+}
+
+.db-mobile-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  border: 0;
+  background: rgba(18, 48, 71, 0.28);
+}
+
+.db-menu-button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--db-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--db-text);
+  cursor: pointer;
+}
+
+.db-menu-button:hover {
+  background: var(--db-cyan-soft);
+}

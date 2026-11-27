@@ -70,7 +70,7 @@ export default function BillingManagement() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState("TODAY");
+  const [dateFilter, setDateFilter] = useState("ALL");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [activeView, setActiveView] = useState("orders");
@@ -685,7 +685,7 @@ export default function BillingManagement() {
               <table className="bill-receipt-items"><thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead><tbody>
                 {(selectedReceipt.items || []).map((item, index) => <tr key={`${item.name}-${index}`}><td>{item.name}{item.customization && <small className="bill-item-customization">Request: {item.customization}</small>}</td><td>{item.quantity}</td><td>{money(item.lineTotal)}</td></tr>)}
               </tbody></table>
-              <div className="bill-receipt-totals"><p><span>Payment method</span><strong>{selectedReceipt.paymentMethod || "—"}</strong></p><p><span>Reference</span><strong>{selectedReceipt.paymentReference || "—"}</strong></p><p className="bill-grand-total"><span>Total paid</span><strong>{money(selectedReceipt.totalAmount)}</strong></p></div>
+              <div className="bill-receipt-totals"><p><span>Payment method</span><strong>{selectedReceipt.paymentMethod || "—"}</strong></p><p><span>Reference</span><strong>{selectedReceipt.paymentReference || "—"}</strong></p>{Number(selectedReceipt.rewardPointsUsed) > 0 && <p><span>Reward points used</span><strong>{selectedReceipt.rewardPointsUsed}</strong></p>}{Number(selectedReceipt.rewardDiscountAmount) > 0 && <p><span>Reward discount</span><strong>−{money(selectedReceipt.rewardDiscountAmount)}</strong></p>}<p className="bill-grand-total"><span>Total paid</span><strong>{money(selectedReceipt.totalAmount)}</strong></p></div>
               <div className="bill-receipt-foot">Payment status: {selectedReceipt.paymentStatus}</div>
             </div>
             <div className="bill-modal-actions bill-receipt-actions">

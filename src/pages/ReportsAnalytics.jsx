@@ -28,7 +28,7 @@ export default function ReportsAnalytics() {
   const restaurantId = useActiveRestaurantId();
   const [orders, setOrders] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [period, setPeriod] = useState("1");
+  const [period, setPeriod] = useState("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
