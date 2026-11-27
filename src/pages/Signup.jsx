@@ -24,12 +24,17 @@ export default function Signup() {
   const [theme, setTheme] = useState(() => localStorage.getItem("texos-theme") || "light");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false);
 
   const finishSignIn = useCallback((data) => routeAfterAuth(data, navigate, planId), [navigate, planId]);
   const googleError = useCallback((message) => setError(message), []);
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (!acceptedPolicies) {
+      setError("Please accept the Terms & Conditions and Privacy Policy to continue.");
+      return;
+    }
     setError("");
     setLoading(true);
     const formData = new FormData(event.currentTarget);
@@ -96,11 +101,30 @@ export default function Signup() {
               <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
             </div>
             {error && <p role="alert" style={{ color: "#ef6464", marginTop: 12 }}>{error}</p>}
-            <button type="submit" className="button auth-submit" disabled={loading}>{loading ? "Creating account…" : "Create Account"}</button>
+            <div className="auth-policy-consent">
+              <input
+                type="checkbox"
+                id="signup-policy-consent"
+                checked={acceptedPolicies}
+                onChange={(event) => setAcceptedPolicies(event.target.checked)}
+                aria-label="Agree to the Terms & Conditions and Privacy Policy"
+                aria-describedby="signup-policy-consent-text"
+                required
+              />
+              <p id="signup-policy-consent-text">
+                By ticking this box, I agree to the{" "}
+                <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</Link>
+                {" "}and{" "}
+                <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+              </p>
+            </div>
+            <button type="submit" className="button auth-submit" disabled={loading || !acceptedPolicies}>{loading ? "Creating account…" : "Create Account"}</button>
           </form>
           {import.meta.env.VITE_GOOGLE_CLIENT_ID && <>
             <div className="auth-divider"><span>or</span></div>
-            <GoogleSignInButton onSuccess={finishSignIn} onError={googleError} />
+            {acceptedPolicies
+              ? <GoogleSignInButton onSuccess={finishSignIn} onError={googleError} />
+              : <p className="auth-policy-required" role="status">Please accept the Terms &amp; Conditions and Privacy Policy to continue.</p>}
           </>}
           <p className="auth-switch">Already have an account? <Link to={`/login${planId ? `?planId=${encodeURIComponent(planId)}` : ""}`}>Login</Link></p>
         </div>

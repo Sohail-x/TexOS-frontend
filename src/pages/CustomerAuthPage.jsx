@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./CustomerMenu.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8080").replace(/\/$/, "");
@@ -33,15 +33,21 @@ export default function CustomerAuthPage({ mode: initialMode = "login" }) {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false);
 
   const menuPath = `/menu/${encodeURIComponent(qrToken)}`;
   const switchMode = (next) => {
+    setAcceptedPolicies(false);
     setMode(next); setError(""); setMessage("");
     navigate(`${menuPath}/${next}`, { replace: true, state: returnToRewards ? { returnToRewards: true } : null });
   };
 
   const submit = async (event) => {
     event.preventDefault(); setError(""); setMessage("");
+    if ((mode === "login" || mode === "signup") && !acceptedPolicies) {
+      setError("Please accept the Terms & Conditions and Privacy Policy to continue.");
+      return;
+    }
     if (mode === "signup" && password !== confirmPassword) {
       setError("Passwords do not match."); return;
     }
@@ -160,7 +166,26 @@ export default function CustomerAuthPage({ mode: initialMode = "login" }) {
           )}
           {error && <div className="cm-error">{error}</div>}
           {message && <div className="cm-auth-message">{message}</div>}
-          <button className="cm-primary full cm-auth-submit" type="submit" disabled={busy}>
+          {mode !== "forgot-password" && (
+            <div className="cm-auth-policy-consent">
+              <input
+                type="checkbox"
+                id="customer-policy-consent"
+                checked={acceptedPolicies}
+                onChange={(event) => setAcceptedPolicies(event.target.checked)}
+                aria-label="Agree to the Terms & Conditions and Privacy Policy"
+                aria-describedby="customer-policy-consent-text"
+                required
+              />
+              <p id="customer-policy-consent-text">
+                By ticking this box, I agree to the{" "}
+                <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</Link>
+                {" "}and{" "}
+                <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+              </p>
+            </div>
+          )}
+          <button className="cm-primary full cm-auth-submit" type="submit" disabled={busy || (mode !== "forgot-password" && !acceptedPolicies)}>
             {busy ? "Please wait…" : mode === "signup" ? "Create account" : mode === "forgot-password" ? "Continue" : "Sign in"}
           </button>
         </form>

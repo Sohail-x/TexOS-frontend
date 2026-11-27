@@ -4,6 +4,15 @@ import { API_BASE } from "./restaurantApi";
 import "./AdminPortal.css";
 
 const TOKEN_KEY = "texos-admin-token";
+const EMPTY_COMPLIANCE_FORM = {
+  customerName: "",
+  customerEmail: "",
+  customerPhone: "",
+  ownerName: "",
+  ownerEmail: "",
+  ownerPhone: "",
+  restaurantName: "",
+};
 
 async function adminRequest(path, token, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -47,6 +56,22 @@ export default function AdminPortal() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [complianceForm, setComplianceForm] = useState(EMPTY_COMPLIANCE_FORM);
+  const [complianceReport, setComplianceReport] = useState(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceError, setComplianceError] = useState("");
+  const [complianceExporting, setComplianceExporting] = useState("");
+  const [deletionRequests, setDeletionRequests] = useState({ ownerDeletions: [], customerDeletions: [] });
+  const [deletionRequestsLoading, setDeletionRequestsLoading] = useState(false);
+  const [deletionRequestsError, setDeletionRequestsError] = useState("");
+
+  const clearComplianceData = useCallback(() => {
+    setComplianceForm(EMPTY_COMPLIANCE_FORM);
+    setComplianceReport(null);
+    setDeletionRequests({ ownerDeletions: [], customerDeletions: [] });
+    setComplianceError("");
+    setDeletionRequestsError("");
+  }, []);
   function toggleTheme() {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
@@ -83,11 +108,12 @@ export default function AdminPortal() {
       if (requestError.message.includes("401") || requestError.message.includes("403")) {
         sessionStorage.removeItem(TOKEN_KEY);
         setToken("");
+        clearComplianceData();
       }
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [clearComplianceData, token]);
 
   const loadSubscriptions = useCallback(async () => {
     if (!token) return;
@@ -116,11 +142,34 @@ export default function AdminPortal() {
       if (requestError.message.includes("401") || requestError.message.includes("403")) {
         sessionStorage.removeItem(TOKEN_KEY);
         setToken("");
+        clearComplianceData();
       }
     } finally {
       setSubscriptionsLoading(false);
     }
-  }, [token]);
+  }, [clearComplianceData, token]);
+
+  const loadDeletionRequests = useCallback(async () => {
+    if (!token) return;
+    setDeletionRequestsLoading(true);
+    setDeletionRequestsError("");
+    try {
+      const result = await adminRequest("/api/admin/compliance/deletion-requests", token);
+      setDeletionRequests({
+        ownerDeletions: result?.ownerDeletions || [],
+        customerDeletions: result?.customerDeletions || [],
+      });
+    } catch (requestError) {
+      setDeletionRequestsError(requestError.message || "Could not load deletion requests.");
+      if (requestError.message.includes("401") || requestError.message.includes("403")) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        setToken("");
+        clearComplianceData();
+      }
+    } finally {
+      setDeletionRequestsLoading(false);
+    }
+  }, [clearComplianceData, token]);
 
   useEffect(() => {
     let active = true;
@@ -128,13 +177,14 @@ export default function AdminPortal() {
       if (active) {
         loadAnnouncements();
         loadSubscriptions();
+        loadDeletionRequests();
       }
       return undefined;
     });
     return () => {
       active = false;
     };
-  }, [loadAnnouncements, loadSubscriptions]);
+  }, [loadAnnouncements, loadSubscriptions, loadDeletionRequests]);
 
   async function login(event) {
     event.preventDefault();
@@ -235,10 +285,76 @@ export default function AdminPortal() {
     }
   }
 
+  async function searchComplianceData(event) {
+    event.preventDefault();
+    if (!Object.values(complianceForm).some((value) => value.trim())) {
+      setComplianceError("Enter at least one search field.");
+      setComplianceReport(null);
+      return;
+    }
+    setComplianceLoading(true);
+    setComplianceError("");
+    setComplianceReport(null);
+    try {
+      setComplianceReport(await adminRequest("/api/admin/compliance/search", token, {
+        method: "POST",
+        body: JSON.stringify(complianceForm),
+      }));
+    } catch (requestError) {
+      setComplianceError(requestError.message || "Could not search compliance data.");
+      if (requestError.message.includes("401") || requestError.message.includes("403")) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        setToken("");
+        clearComplianceData();
+      }
+    } finally {
+      setComplianceLoading(false);
+    }
+  }
+
+  async function downloadComplianceExport(format) {
+    setComplianceExporting(format);
+    setComplianceError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/compliance/export/${format}`, {
+        method: "POST",
+        headers: {
+          Accept: format === "pdf" ? "application/pdf" : "text/csv",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(complianceForm),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || `Export failed (HTTP ${response.status}).`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `texos-compliance-export.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (requestError) {
+      setComplianceError(requestError.message || `Could not export ${format.toUpperCase()}.`);
+      if (requestError.message.includes("401") || requestError.message.includes("403")) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        setToken("");
+        clearComplianceData();
+      }
+    } finally {
+      setComplianceExporting("");
+    }
+  }
+
   function logout() {
     sessionStorage.removeItem(TOKEN_KEY);
     setToken("");
     setAnnouncements([]);
+    clearComplianceData();
     navigate("/texos-admin/login", { replace: true });
   }
 
@@ -259,7 +375,7 @@ export default function AdminPortal() {
   }
 
   return <main className="admin-page" data-theme={theme}>
-    <header className="admin-header"><div><span className="admin-brand-mark">T</span><div><p className="admin-eyebrow">TEXOS PLATFORM</p><h1>Welcome Admin, Md Sohail (Founder of TexOS)</h1></div></div><div className="admin-header-actions">{themeToggle}<button type="button" className="admin-secondary-button" onClick={logout}>Sign out</button></div></header>
+    <header className="admin-header"><div><span className="admin-brand-mark">T</span><div><p className="admin-eyebrow">TEXOS PLATFORM</p><h1>Welcome Admin, Md Sohail (Founder of TexOS)</h1></div></div><div className="admin-header-actions">{themeToggle}<button type="button" className="admin-secondary-button" onClick={() => document.getElementById("admin-compliance-export")?.scrollIntoView({ behavior: "smooth" })}>Export Compliance Data</button><button type="button" className="admin-secondary-button" onClick={logout}>Sign out</button></div></header>
     {error && <div className="admin-alert error" role="alert">{error}</div>}
     {notice && <div className="admin-alert success" role="status">{notice}</div>}
     <section className="admin-card">
@@ -293,6 +409,57 @@ export default function AdminPortal() {
           <div className="admin-announcement-actions"><span className={announcement.active ? "active" : ""}>{announcement.active ? "Active" : "Inactive"}</span><button type="button" className="admin-secondary-button" onClick={() => setActive(announcement, !announcement.active)}>{announcement.active ? "Deactivate" : "Activate"}</button><button type="button" className="admin-delete-button" onClick={() => deleteAnnouncement(announcement)}>Delete</button></div>
         </article>)}
       </div>}
+    </section>
+    <section className="admin-card" id="admin-compliance-export">
+      <h2>Compliance Data Export</h2>
+      <p>Search owner, restaurant, customer, order, bill, and loyalty records, including deletion and anonymization status.</p>
+      <form className="admin-form admin-compliance-form" onSubmit={searchComplianceData}>
+        <div className="admin-compliance-sections">
+          <fieldset className="admin-compliance-section">
+            <legend>Customer Details</legend>
+            <div className="admin-compliance-section-fields">
+              <label>Customer Name<input value={complianceForm.customerName} onChange={(event) => setComplianceForm({ ...complianceForm, customerName: event.target.value })} /></label>
+              <label>Customer Email (optional)<input type="email" value={complianceForm.customerEmail} onChange={(event) => setComplianceForm({ ...complianceForm, customerEmail: event.target.value })} /></label>
+              <label>Customer Phone (optional)<input type="tel" value={complianceForm.customerPhone} onChange={(event) => setComplianceForm({ ...complianceForm, customerPhone: event.target.value })} /></label>
+            </div>
+          </fieldset>
+          <fieldset className="admin-compliance-section">
+            <legend>Owner &amp; Restaurant Details</legend>
+            <div className="admin-compliance-section-fields">
+              <label>Owner Name<input value={complianceForm.ownerName} onChange={(event) => setComplianceForm({ ...complianceForm, ownerName: event.target.value })} /></label>
+              <label>Owner Email (optional)<input type="email" value={complianceForm.ownerEmail} onChange={(event) => setComplianceForm({ ...complianceForm, ownerEmail: event.target.value })} /></label>
+              <label>Owner Phone (optional)<input type="tel" value={complianceForm.ownerPhone} onChange={(event) => setComplianceForm({ ...complianceForm, ownerPhone: event.target.value })} /></label>
+              <label>Restaurant / Cafe Name (optional)<input value={complianceForm.restaurantName} onChange={(event) => setComplianceForm({ ...complianceForm, restaurantName: event.target.value })} /></label>
+            </div>
+          </fieldset>
+        </div>
+        <button type="submit" disabled={complianceLoading}>{complianceLoading ? "Generating…" : "Generate"}</button>
+      </form>
+      <p className="admin-timestamp-note">Deletion timestamps are shown in your local timezone.</p>
+      {complianceError && <div className="admin-alert error" role="alert">{complianceError}</div>}
+      {complianceReport && <div className="admin-compliance-result" role="status">
+        {complianceReport.summary.totalMatchedRecords === 0
+          ? <p>No matching compliance records were found.</p>
+          : <><p>Matched {complianceReport.summary.totalMatchedRecords} records: {complianceReport.summary.ownerCount} owners, {complianceReport.summary.restaurantCount} restaurants, {complianceReport.summary.customerCount} customers, {complianceReport.summary.orderCount} orders, {complianceReport.summary.billCount} bills, and {complianceReport.summary.loyaltyAccountCount} loyalty accounts.</p>
+            <div className="admin-compliance-actions">
+              <button type="button" className="admin-secondary-button" disabled={Boolean(complianceExporting)} onClick={() => downloadComplianceExport("pdf")}>{complianceExporting === "pdf" ? "Exporting PDF…" : "Export in PDF"}</button>
+              <button type="button" className="admin-secondary-button" disabled={Boolean(complianceExporting)} onClick={() => downloadComplianceExport("csv")}>{complianceExporting === "csv" ? "Exporting CSV…" : "Export CSV"}</button>
+            </div></>}
+      </div>}
+    </section>
+    <section className="admin-card">
+      <div className="admin-list-heading"><div><h2>Owner Deletion Requests</h2><p>PII erasure and registration-metadata retention countdowns.</p></div><button type="button" className="admin-secondary-button" disabled={deletionRequestsLoading} onClick={loadDeletionRequests}>{deletionRequestsLoading ? "Refreshing…" : "Refresh"}</button></div>
+      {deletionRequestsError && <div className="admin-alert error" role="alert">{deletionRequestsError}</div>}
+      {deletionRequestsLoading ? <p className="admin-empty">Loading owner deletion requests…</p> : deletionRequests.ownerDeletions.length === 0 ? <p className="admin-empty">No owner deletion requests found.</p> : <div className="admin-table-wrap"><table className="admin-table admin-compliance-table"><thead><tr><th>OWNER</th><th>EMAIL</th><th>PHONE</th><th>RESTAURANTS</th><th>DELETED</th><th>STATUS</th><th>PII ERASURE</th><th>METADATA PURGE</th></tr></thead><tbody>
+        {deletionRequests.ownerDeletions.map((request) => <tr key={request.ownerId}><td>{request.name || "—"}</td><td>{request.email || "—"}</td><td>{request.phone || "—"}</td><td>{request.restaurantNames?.join(", ") || "—"}</td><td>{request.deletedAt ? new Date(request.deletedAt).toLocaleString() : "—"}</td><td>{request.anonymizedAt ? "PII Anonymized" : "Pending Erasure"}</td><td>{request.anonymizedAt ? "Complete" : `${request.daysRemainingPiiErasure} days`}</td><td>{request.daysRemainingMetadataPurge} days</td></tr>)}
+      </tbody></table></div>}
+    </section>
+    <section className="admin-card">
+      <div className="admin-list-heading"><div><h2>Customer Deletion Requests</h2><p>Customer profile erasure status and countdown.</p></div><button type="button" className="admin-secondary-button" disabled={deletionRequestsLoading} onClick={loadDeletionRequests}>{deletionRequestsLoading ? "Refreshing…" : "Refresh"}</button></div>
+      {deletionRequestsError && <div className="admin-alert error" role="alert">{deletionRequestsError}</div>}
+      {deletionRequestsLoading ? <p className="admin-empty">Loading customer deletion requests…</p> : deletionRequests.customerDeletions.length === 0 ? <p className="admin-empty">No customer deletion requests found.</p> : <div className="admin-table-wrap"><table className="admin-table admin-compliance-table"><thead><tr><th>CUSTOMER</th><th>PHONE</th><th>EMAIL</th><th>RESTAURANT</th><th>DELETED</th><th>STATUS</th><th>PII ERASURE</th></tr></thead><tbody>
+        {deletionRequests.customerDeletions.map((request) => <tr key={request.customerId}><td>{request.name || "—"}</td><td>{request.phone || "—"}</td><td>{request.email || "—"}</td><td>{request.restaurantName || "—"}</td><td>{request.deletedAt ? new Date(request.deletedAt).toLocaleString() : "—"}</td><td>{request.anonymizedAt ? "PII Anonymized" : "Pending Erasure"}</td><td>{request.anonymizedAt ? "Complete" : `${request.daysRemainingPiiErasure} days`}</td></tr>)}
+      </tbody></table></div>}
     </section>
   </main>;
 }

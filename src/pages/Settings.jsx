@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { API_BASE, apiFetch } from "./restaurantApi";
+import { clearAllTexosData } from "./authSession";
 import "./Settings.css";
 
 const EMPTY_RESTAURANT = { restaurantName: "", address: "", phone: "", email: "", googleMapsUrl: "", openingHours: "" };
@@ -15,6 +17,7 @@ async function request(path, options) {
 }
 
 export default function Settings({ owner, restaurants, activeRestaurantId, onOwnerUpdated, onRestaurantCreated, onRestaurantUpdated, onRestaurantRemoved }) {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState({
     fullName: owner?.fullName || "",
     phone: owner?.phone || "",
@@ -37,6 +40,10 @@ export default function Settings({ owner, restaurants, activeRestaurantId, onOwn
   const [kitchenAccessExpanded, setKitchenAccessExpanded] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteAccountError, setDeleteAccountError] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const avatarInputRef = useRef(null);
   const kitchenPollInFlightRef = useRef(false);
 
@@ -44,6 +51,10 @@ export default function Settings({ owner, restaurants, activeRestaurantId, onOwn
   const [openingHours, setOpeningHours] = useState(() => {
     const active = restaurants?.find((r) => String(r.restaurantId ?? r.id) === String(activeRestaurantId));
     return active?.openingHours || "";
+  });
+  const [googleMapsUrl, setGoogleMapsUrl] = useState(() => {
+    const active = restaurants?.find((r) => String(r.restaurantId ?? r.id) === String(activeRestaurantId));
+    return active?.googleMapsUrl || "";
   });
 
 
@@ -107,6 +118,7 @@ useEffect(() => {
   useEffect(() => {
     const active = restaurants?.find((r) => String(r.restaurantId ?? r.id) === String(activeRestaurantId));
     setOpeningHours(active?.openingHours || "");
+    setGoogleMapsUrl(active?.googleMapsUrl || "");
   }, [activeRestaurantId, restaurants]);
 
   useEffect(() => {
@@ -337,11 +349,12 @@ useEffect(() => {
               address: activeRestaurant.address || "",
               phone: activeRestaurant.phone || "",
               email: activeRestaurant.email || "",
-              googleMapsUrl: activeRestaurant.googleMapsUrl || "",
+              googleMapsUrl: googleMapsUrl.trim(),
               openingHours: openingHours.trim(),
             }),
           });
           onRestaurantUpdated?.(updatedRestaurant);
+          setGoogleMapsUrl(updatedRestaurant.googleMapsUrl || "");
         }
       }
 
@@ -411,6 +424,23 @@ useEffect(() => {
     }
   }
 
+  async function deleteOwnerAccount() {
+    setDeletingAccount(true);
+    setDeleteAccountError("");
+    try {
+      await request("/api/owners/me", {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      });
+      clearAllTexosData();
+      navigate("/login", { replace: true });
+    } catch (requestError) {
+      setDeleteAccountError(requestError.message || "Could not delete your owner account.");
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
   return (
     <section className="db-settings-page">
       <p className="db-eyebrow">PROFILE & RESTAURANTS</p>
@@ -418,14 +448,14 @@ useEffect(() => {
       <p>Manage your owner profile and restaurant workspaces.</p>
 
       {error && <div role="alert" className="db-settings-alert error">{error}</div>}
-      {notice && <div role="status" className="db-settings-alert success">{notice}</div>}
+      {/* {notice && <div role="status" className="db-settings-alert success">{notice}</div>}  */}
 
       <section className="db-panel db-settings-card">
         <h2>Owner profile</h2>
         <form onSubmit={saveProfile} className="db-settings-form">
-          <label>Full name<input required maxLength="100" value={profile.fullName} onChange={(event) => setProfile({ ...profile, fullName: event.target.value })} /></label>
-          <label>Email<input value={owner?.email || ""} readOnly /></label>
-          <label>Phone<input required maxLength="20" value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
+          <label>Full name <input required maxLength="100" value={profile.fullName} onChange={(event) => setProfile({ ...profile, fullName: event.target.value })} /></label>
+          <label>Email (Uneditable)<input value={owner?.email || ""} readOnly /></label>
+          <label>Phone (Uneditable)<input required maxLength="20" value={profile.phone} readOnly /></label>
           {/* Restaurant opening & closing time – saved to the active restaurant when profile is saved */}
           {activeRestaurantId && (
             <label>
@@ -442,6 +472,21 @@ useEffect(() => {
               </small>
             </label>
           )}
+          {activeRestaurantId && (
+            <label>
+              Add your Google Maps link to Enable Review Button
+              <input
+                type="url"
+                maxLength={2048}
+                placeholder="https://g.page/r/…/review"
+                value={googleMapsUrl}
+                onChange={(event) => setGoogleMapsUrl(event.target.value)}
+              />
+              <small className="db-settings-field-help">
+                Customers can use this link from the menu’s Share Review button.
+              </small>
+            </label>
+          )}
           <div className="db-avatar-field">
             <span>Profile image (optional)</span>
             <div className="db-avatar-upload-row">
@@ -454,6 +499,7 @@ useEffect(() => {
               </div>
             </div>
           </div>
+          <p></p>
           <button type="submit" className="db-primary-button" disabled={savingProfile}>{savingProfile ? "Saving…" : "Save profile"}</button>
         </form>
       </section>
@@ -569,9 +615,71 @@ useEffect(() => {
           <label>Email<input type="email" maxLength="100" value={newRestaurant.email} onChange={(event) => setNewRestaurant({ ...newRestaurant, email: event.target.value })} /></label>
           <label>Google Maps review link<input type="url" maxLength={2048} placeholder="https://maps.google.com/…" value={newRestaurant.googleMapsUrl} onChange={(event) => setNewRestaurant({ ...newRestaurant, googleMapsUrl: event.target.value })} /></label>
           <label>Opening Hours<input maxLength="100" placeholder="e.g. Open 11am–10pm" value={newRestaurant.openingHours || ""} onChange={(event) => setNewRestaurant({ ...newRestaurant, openingHours: event.target.value })} /></label>
+          <p></p>
           <button type="submit" className="db-primary-button" disabled={savingRestaurant}>{savingRestaurant ? "Saving…" : "Add restaurant"}</button>
         </form>
       </section>
+
+      <section className="db-panel db-settings-card db-danger-zone">
+        <h2>Danger Zone — Delete Owner Account</h2>
+        <p>Deleting your account will anonymize your owner profile and deactivate its restaurant workspaces.</p>
+        <button
+          type="button"
+          className="db-danger-button"
+          onClick={() => {
+            setDeleteConfirmation("");
+            setDeleteAccountError("");
+            setDeleteAccountOpen(true);
+          }}
+        >
+          Delete Account
+        </button>
+      </section>
+
+      {deleteAccountOpen && <div
+        className="db-kitchen-code-backdrop"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (!deletingAccount && event.target === event.currentTarget) {
+            setDeleteAccountOpen(false);
+          }
+        }}
+      >
+        <section className="db-kitchen-code-modal db-delete-account-modal" role="dialog" aria-modal="true" aria-labelledby="delete-owner-title">
+          <button
+            type="button"
+            className="db-kitchen-code-close"
+            aria-label="Close"
+            disabled={deletingAccount}
+            onClick={() => setDeleteAccountOpen(false)}
+          >×</button>
+          <h2 id="delete-owner-title">Delete Owner Account?</h2>
+          <p>Deleting your TexOS owner account will erase or anonymize your profile, restaurant settings, and menu data within 30 days. Basic registration records (up to 180 days under IT Rules, 2021) and tax or invoice records (up to 8 financial years / 72 months under Indian tax and GST laws) are retained solely as required by law. This action cannot be undone.</p>
+          <p class="danger">Warning : All you restaurant, linked with this account, will be Annoymised/Eraseed and this action can not be undone.</p>
+          <label className="db-delete-confirmation">
+            Type DELETE to confirm
+            <input
+              type="text"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+              disabled={deletingAccount}
+            />
+          </label>
+          {deleteAccountError && <p className="db-settings-alert error" role="alert">{deleteAccountError}</p>}
+          <div className="db-delete-account-actions">
+            <button type="button" className="db-secondary-button" disabled={deletingAccount} onClick={() => setDeleteAccountOpen(false)}>Cancel</button>
+            <button
+              type="button"
+              className="db-danger-button"
+              disabled={deletingAccount || deleteConfirmation !== "DELETE"}
+              onClick={deleteOwnerAccount}
+            >
+              {deletingAccount ? "Deleting…" : "Delete Account"}
+            </button>
+          </div>
+        </section>
+      </div>}
 
       {kitchenAccessCode && kitchenAccessCode.restaurantId === String(activeRestaurantId) && <div className="db-kitchen-code-backdrop" role="presentation" onMouseDown={(event) => {
         if (event.target === event.currentTarget) setKitchenAccessCode(null);

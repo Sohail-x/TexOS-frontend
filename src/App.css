@@ -477,6 +477,7 @@
   border-bottom: 1px solid var(--border);
 }
 
+
 .trust-strip p {
   margin: 0 0 15px;
   color: var(--muted);
@@ -936,6 +937,78 @@
   cursor: pointer;
 }
 
+.auth-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.auth-policy-consent {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--auth-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.auth-policy-consent input[type="checkbox"] {
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+  margin: 1px 0 0;
+  padding: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.auth-page[data-theme="dark"] .auth-policy-consent input[type="checkbox"] {
+  accent-color: #00e5ff;
+}
+
+.auth-policy-consent p {
+  margin: 0;
+}
+
+.auth-policy-consent a {
+  color: var(--primary-dark);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-policy-consent a:hover {
+  color: #005f91;
+}
+
+.auth-policy-required {
+  margin: 0 0 16px;
+  color: var(--auth-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.auth-policy-notice {
+  margin: 0;
+  color: var(--auth-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.auth-policy-notice a {
+  color: var(--primary-dark);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-policy-notice a:hover {
+  color: #005f91;
+}
+
 .google-signin-button {
   display: flex;
   justify-content: center;
@@ -1001,7 +1074,7 @@
   --border: #1e293b;
   --surface: #0b1329;
   --soft: #0f2338;
-  --background: #060b19;
+  --background: #0b1329;
   background: var(--background);
   color: var(--text);
 }
@@ -1023,7 +1096,7 @@
 
 .app[data-theme="dark"] .hero,
 .app[data-theme="dark"] .ordering-section {
-  background: #060b19;
+  background: #0b1329;
 }
 
 .app[data-theme="dark"] .nav-links a,
@@ -1092,7 +1165,32 @@
   color: #e2e8f0;
 }
 
-.auth-page[data-theme="dark"] .auth-card form input {
+.auth-page[data-theme="dark"] .auth-policy-consent,
+.auth-page[data-theme="dark"] .auth-policy-required {
+  color: #cbd5e1;
+}
+
+.auth-page[data-theme="dark"] .auth-policy-consent a {
+  color: #00e5ff;
+}
+
+.auth-page[data-theme="dark"] .auth-policy-consent a:hover {
+  color: #67efff;
+}
+
+.auth-page[data-theme="dark"] .auth-policy-notice {
+  color: #94a3b8;
+}
+
+.auth-page[data-theme="dark"] .auth-policy-notice a {
+  color: #00e5ff;
+}
+
+.auth-page[data-theme="dark"] .auth-policy-notice a:hover {
+  color: #67efff;
+}
+
+.auth-page[data-theme="dark"] .auth-card form input:not([type="checkbox"]) {
   background: #060b19;
   color: #f1f5f9;
   border-color: #1e293b;

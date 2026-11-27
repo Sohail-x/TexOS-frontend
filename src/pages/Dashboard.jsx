@@ -716,7 +716,7 @@ export default function Dashboard({ authenticatedAccount = null }) {
             <div className="db-breadcrumb"><span>Workspace</span><b>/</b><strong>{active}</strong></div>
           </div>
           <div className="db-topbar-context">
-            {restaurants.length > 0 && <select className="db-header-restaurant-select" aria-label="Select restaurant" value={restaurantId} onChange={(event) => setActiveRestaurantId(event.target.value)}><option value="">Select restaurant</option>{restaurants.map((r) => <option key={r.restaurantId ?? r.id} value={r.restaurantId ?? r.id}>{r.restaurantName || `Restaurant ${r.restaurantId ?? r.id}`}</option>)}</select>}
+            {restaurants.length > 0 && <select className="db-header-restaurant-select" aria-label="Select restaurant" value={restaurantId} onChange={(event) => setActiveRestaurantId(event.target.value)}><option value="">Select restaurant</option>{restaurants.map((r) => <option key={r.restaurantId ?? r.id} value={r.restaurantId ?? r.id}>{r.restaurantName || `Restaurant ${r.restaurantId ?? r.id}`}</option>)}^</select>}
             <span className="db-open-status"><span />Live</span>
           </div>
           <div className="db-topbar-actions">

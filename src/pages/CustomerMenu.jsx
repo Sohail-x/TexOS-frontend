@@ -107,8 +107,11 @@ function WaiterRecallButton({ waiterRequest, waiterBusy, onRecall, onCooldownErr
 
 function FoodImage({ src, name }) {
   const [failed, setFailed] = useState(false);
+  const imageSrc = src?.startsWith("/api/public/menu/")
+    ? `${API_BASE}${src}`
+    : src;
 
-  if (!src || failed) {
+  if (!imageSrc || failed) {
     return (
       <div className="food-image food-image-fallback" aria-label={name}>
         <span>🍽️</span>
@@ -119,7 +122,7 @@ function FoodImage({ src, name }) {
   return (
     <img
       className="food-image"
-      src={src}
+      src={imageSrc}
       alt={name}
       loading="lazy"
       onError={() => setFailed(true)}
@@ -698,12 +701,32 @@ function CustomerProfileView({
   onLogout,
   logoutBusy,
   logoutError,
+  onDeleteAccount,
+  deletionMessage,
   paymentHistory,
   paymentHistoryError,
   qrToken,
 }) {
   const navigate = useNavigate();
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
   const menuPath = `/menu/${encodeURIComponent(qrToken)}`;
+
+  const confirmDeleteAccount = async () => {
+    setDeleteAccountBusy(true);
+    setDeleteAccountError("");
+    try {
+      await onDeleteAccount();
+      setDeleteAccountOpen(false);
+      setDeleteConfirmation("");
+    } catch (error) {
+      setDeleteAccountError(error.message || "Could not delete your account. Please try again.");
+    } finally {
+      setDeleteAccountBusy(false);
+    }
+  };
 
   return (
     <section className="cm-profile-page-view">
@@ -713,6 +736,8 @@ function CustomerProfileView({
       </div>
 
       <div className="cm-profile-content">
+        {deletionMessage && <p className="cm-profile-deletion-message" role="status">{deletionMessage}</p>}
+
         <div className="cm-profile-avatar-row">
           <div className="cm-profile-avatar">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -827,9 +852,66 @@ function CustomerProfileView({
             >
               {logoutBusy ? "Signing out…" : "Sign out from this restaurant"}
             </button>
+            <button
+              type="button"
+              className="cm-profile-delete-account-btn"
+              onClick={() => {
+                setDeleteConfirmation("");
+                setDeleteAccountError("");
+                setDeleteAccountOpen(true);
+              }}
+            >
+              Delete My Account &amp; Data
+            </button>
           </div>
         )}
       </div>
+
+      {deleteAccountOpen && <div
+        className="cm-delete-account-backdrop"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (!deleteAccountBusy && event.target === event.currentTarget) {
+            setDeleteAccountOpen(false);
+          }
+        }}
+      >
+        <section className="cm-delete-account-modal" role="dialog" aria-modal="true" aria-labelledby="cm-delete-account-title">
+          <button
+            type="button"
+            className="cm-delete-account-close"
+            aria-label="Close"
+            disabled={deleteAccountBusy}
+            onClick={() => setDeleteAccountOpen(false)}
+          >×</button>
+          <span className="cm-eyebrow">ACCOUNT DELETION</span>
+          <h2 id="cm-delete-account-title">Delete your account?</h2>
+          <p>Are you sure, you want to delete your account...? <br></br>As it erase/reset all your reward points and this action can not be undone.</p>
+          {/* <p>Deleting your customer profile will erase or anonymize your name, mobile number, email, and active loyalty points within 30 days. Basic registration logs (up to 180 days) and restaurant bill/tax records (up to 8 financial years / 72 months, anonymized where permitted) are retained only as required by Indian law. This action cannot be undone.</p> */}
+          <label>
+            Type DELETE to confirm
+            <input
+              type="text"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+              disabled={deleteAccountBusy}
+            />
+          </label>
+          {deleteAccountError && <p className="cm-error" role="alert">{deleteAccountError}</p>}
+          <div className="cm-delete-account-actions">
+            <button type="button" disabled={deleteAccountBusy} onClick={() => setDeleteAccountOpen(false)}>Cancel</button>
+            <button
+              type="button"
+              className="cm-delete-account-confirm"
+              disabled={deleteAccountBusy || deleteConfirmation !== "DELETE"}
+              onClick={confirmDeleteAccount}
+            >
+              {deleteAccountBusy ? "Deleting…" : "Delete My Account"}
+            </button>
+          </div>
+        </section>
+      </div>}
     </section>
   );
 }
@@ -935,6 +1017,7 @@ export default function CustomerMenu() {
   });
   const [customerSessionLoading, setCustomerSessionLoading] = useState(true);
   const [customerSessionError, setCustomerSessionError] = useState("");
+  const [customerDeletionMessage, setCustomerDeletionMessage] = useState("");
 
   // Resolves customer session with mobile number from session, reward status, or cached login
   const activeCustomerSession = useMemo(() => {
@@ -1207,9 +1290,11 @@ export default function CustomerMenu() {
     if (!merchantOrderId) return undefined;
     let active = true;
     let attempts = 0;
+    let requestInFlight = false;
     let interval;
     const checkStatus = async () => {
-      if (!active) return;
+      if (!active || document.visibilityState === "hidden" || requestInFlight) return;
+      requestInFlight = true;
       attempts += 1;
       try {
         const status = await api(
@@ -1237,12 +1322,19 @@ export default function CustomerMenu() {
           window.clearInterval(interval);
           setMerchantOrderId("");
         }
+      } finally {
+        requestInFlight = false;
       }
     };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") checkStatus();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     checkStatus();
     interval = window.setInterval(checkStatus, 3000);
     return () => {
       active = false;
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       window.clearInterval(interval);
     };
   }, [loadCurrentBill, location.pathname, location.search, merchantOrderId, navigate, qrToken]);
@@ -1250,7 +1342,10 @@ export default function CustomerMenu() {
   useEffect(() => {
     if (!waiterRequest?.requestId || waiterRequest.status !== "PENDING") return undefined;
     let active = true;
-    const interval = window.setInterval(async () => {
+    let requestInFlight = false;
+    const checkStatus = async () => {
+      if (!active || document.visibilityState === "hidden" || requestInFlight) return;
+      requestInFlight = true;
       try {
         const status = await api(
           `/api/public/orders/waiter-request/${waiterRequest.requestId}?qrToken=${encodeURIComponent(qrToken)}`,
@@ -1261,10 +1356,20 @@ export default function CustomerMenu() {
         }
       } catch (error) {
         if (active) setWaiterError(error.message || "Could not refresh waiter request.");
+      } finally {
+        requestInFlight = false;
       }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") checkStatus();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const interval = window.setInterval(async () => {
+      checkStatus();
     }, 5000);
     return () => {
       active = false;
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       window.clearInterval(interval);
     };
   }, [qrToken, waiterRequest?.requestId, waiterRequest?.status]);
@@ -1285,6 +1390,35 @@ export default function CustomerMenu() {
     } finally {
       setCustomerLogoutBusy(false);
     }
+  };
+
+  const deleteCustomerAccount = async () => {
+    await api(`/api/customer/auth/account?qrToken=${encodeURIComponent(qrToken)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirmation: "DELETE" }),
+    });
+
+    let browserDataCleared = true;
+    for (const key of [`texos_customer_${qrToken}`, `texos_fav_${qrToken}`]) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        browserDataCleared = false;
+      }
+    }
+    try {
+      sessionStorage.clear();
+    } catch {
+      browserDataCleared = false;
+    }
+    setCustomerSession(null);
+    setRewardStatus(null);
+    setFavorites([]);
+    setCustomerPaymentHistory([]);
+    setCustomerPaymentHistoryError("");
+    setCustomerDeletionMessage(browserDataCleared
+      ? "Your account has been deleted and you have been signed out."
+      : "Your account has been deleted and you have been signed out. Please clear this site's browser data to remove locally cached information.");
   };
 
   useEffect(() => {
@@ -1515,7 +1649,7 @@ export default function CustomerMenu() {
           </div>
         </div>
 
-        {/* Dynamic Action Strip: "Share Review on Map" & "See Bill" (Requirement 2 & 3) */}
+        {/* Dynamic Action Strip: share a review and view the bill */}
         <div className="cm-header-action-strip">
           {menu.googleMapsUrl ? (
             <a
@@ -1527,7 +1661,7 @@ export default function CustomerMenu() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
-              <span>Share Review on Map</span>
+              <span>Share Review</span>
             </a>
           ) : (
             <button
@@ -1539,7 +1673,7 @@ export default function CustomerMenu() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
-              <span>Share Review on Map</span>
+              <span>Share Review</span>
             </button>
           )}
 
@@ -1587,6 +1721,8 @@ export default function CustomerMenu() {
             onLogout={logoutCustomer}
             logoutBusy={customerLogoutBusy}
             logoutError={customerLogoutError}
+            onDeleteAccount={deleteCustomerAccount}
+            deletionMessage={customerDeletionMessage}
             paymentHistory={customerPaymentHistory}
             paymentHistoryError={customerPaymentHistoryError}
             qrToken={qrToken}

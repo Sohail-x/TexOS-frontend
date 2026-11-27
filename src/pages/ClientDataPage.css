@@ -1,5 +1,6 @@
-.client-data-page{min-height:100vh;padding:28px;max-width:1440px;margin:auto;box-sizing:border-box;background:#f4f8fa;color:#173247}
-.client-data-header{display:flex;align-items:center;gap:22px;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;text-align:left}
+.client-data-page{width:100%;min-height:100vh;padding:28px;margin:0;box-sizing:border-box;background:#f4f8fa;color:#173247}
+html,body,#root{width:100%;min-width:0}
+.client-data-header{display:flex;align-items:center;gap:367px;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;text-align:left}
 .client-data-header>div{margin-right:auto;text-align:left}
 .client-data-header h1{margin:4px 0;font-size:24px;color:#173247}.client-data-header p{margin:4px 0;color:#778895}
 .client-data-eyebrow{font-size:10px;letter-spacing:1.3px;font-weight:800;color:#089eb0!important}
@@ -10,5 +11,17 @@
 .client-data-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.client-data-metrics article{background:#fff;border:1px solid #e2ebef;border-radius:14px;box-shadow:0 12px 35px #1732470c;padding:20px;display:grid;gap:12px}.client-data-metrics span{color:#778895;font-size:13px}.client-data-metrics strong{font-size:27px;color:#089eb0}
 .client-data-table-card h2{margin:0 0 5px}.client-data-table-card p{color:#778895;font-size:13px}.client-data-table-wrap{overflow:auto;margin-top:16px}.client-data-table-wrap table{width:100%;border-collapse:collapse;min-width:650px}.client-data-table-wrap th,.client-data-table-wrap td{text-align:left;padding:13px 12px;border-bottom:1px solid #eef2f4;font-size:13px}.client-data-table-wrap th{color:#8796a0;font-size:11px;letter-spacing:.7px}.client-data-error{background:#fff0ef;color:#b42318;border-radius:10px;padding:12px;margin:14px 0}.client-data-empty{color:#778895;padding:18px 0}
 .admin-restaurant-link{border:0;background:none;padding:0;color:#29c2dc;font:inherit;font-weight:750;cursor:pointer;text-align:left}.admin-restaurant-link:hover{text-decoration:underline}
+.client-data-header-actions{display:flex;align-items:center;gap:9px;margin-right:0!important}
+.client-data-theme-toggle{width:38px;height:38px;display:grid;place-items:center;border:1px solid #dce7eb;border-radius:10px;background:#fff;color:#3d5664;font-size:18px;line-height:1;cursor:pointer}
+.client-data-page[data-theme="dark"]{background:#10202b;color:#edf8fb;color-scheme:dark}
+.client-data-page[data-theme="dark"] .client-data-header h1{color:#edf8fb}
+.client-data-page[data-theme="dark"] .client-data-header p,.client-data-page[data-theme="dark"] .client-data-filter>span,.client-data-page[data-theme="dark"] .client-data-table-card p,.client-data-page[data-theme="dark"] .client-data-metrics span,.client-data-page[data-theme="dark"] .client-data-empty{color:#91aab4}
+.client-data-page[data-theme="dark"] .client-data-eyebrow{color:#75d8e5!important}
+.client-data-page[data-theme="dark"] .client-data-filter,.client-data-page[data-theme="dark"] .client-data-table-card,.client-data-page[data-theme="dark"] .client-data-metrics article{background:#17313f;border-color:#284858;box-shadow:0 12px 35px #06141c66}
+.client-data-page[data-theme="dark"] .client-data-filter label,.client-data-page[data-theme="dark"] .client-data-table-wrap th{color:#b5c8d0}
+.client-data-page[data-theme="dark"] .client-data-filter select,.client-data-page[data-theme="dark"] .client-data-filter input,.client-data-page[data-theme="dark"] .client-data-back,.client-data-page[data-theme="dark"] .client-data-refresh,.client-data-page[data-theme="dark"] .client-data-theme-toggle,.client-data-page[data-theme="dark"] .client-data-filter button{background:#17313f;border-color:#315767;color:#e8f3f6}
+.client-data-page[data-theme="dark"] .client-data-table-wrap th,.client-data-page[data-theme="dark"] .client-data-table-wrap td{border-color:#284858;color:#b5c8d0}
+.client-data-page[data-theme="dark"] .client-data-metrics strong{color:#75d8e5}
+.client-data-page[data-theme="dark"] .client-data-error{background:#4b2526;color:#ffb4ad}
 @media(max-width:800px){.client-data-page{padding:16px}.client-data-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.client-data-filter>span{margin-left:0}}
 @media(max-width:420px){.client-data-metrics{grid-template-columns:1fr}}

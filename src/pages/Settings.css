@@ -1,9 +1,11 @@
-.db-settings-page{max-width:900px;color:var(--db-text)}
+.db-settings-page{--db-danger-accent:#b42318;--db-danger-button-bg:#b42318;--db-danger-button-hover:#912018;--db-danger-button-border:#b42318;--db-danger-button-text:#fff;max-width:900px;color:var(--db-text)}
+.texos-dashboard[data-theme="dark"] .db-settings-page{--db-danger-accent:#ffb4ad;--db-danger-button-bg:#7f1d1d;--db-danger-button-hover:#991b1b;--db-danger-button-border:#ffb4ad;--db-danger-button-text:#fff1f2}
 .db-settings-page>h1{margin:0 0 6px;font-size:26px}
 .db-settings-page>p:not(.db-eyebrow){margin:0 0 20px;color:var(--db-muted);font-size:13px}
 .db-settings-card{margin-top:16px;padding:22px}
 .db-settings-card h2{margin:0 0 16px;font-size:16px}
 .db-settings-form label{gap:6px;color:var(--db-muted);font-size:11px;font-weight:700}
+.db-settings-field-help{display:block;margin-top:4px;color:var(--db-muted);font-size:11px;font-weight:500;line-height:1.45}
 .db-settings-form input{width:100%;height:38px;min-height:38px;box-sizing:border-box;border:1px solid var(--db-border);border-radius:8px;padding:10px 11px;background:var(--db-bg);color:var(--db-text);font:inherit;font-size:12px}
 .db-settings-form input:focus{outline:2px solid #13a9b833;border-color:#13a9b8}
 .db-settings-form input[readonly]{opacity:.75}
@@ -52,4 +54,34 @@
 .db-kitchen-code-timer{color:#087e83;font-size:12px}
 .db-kitchen-code-modal .db-primary-button{justify-self:stretch}
 .db-kitchen-code-modal small{color:var(--db-subtle);font-size:10px;line-height:1.5}
+.db-danger-zone{border:1px solid var(--db-border)!important;border-left:3px solid var(--db-danger-accent)!important;background:var(--db-panel)!important}
+.db-danger-zone h2{color:var(--db-text)}
+.db-danger-zone>p,.db-delete-account-modal>p{margin:0 0 14px;color:var(--db-muted);font-size:12px;line-height:1.6}
+.db-danger-button{min-height:36px;border:1px solid var(--db-danger-button-border);border-radius:8px;padding:0 14px;background:var(--db-danger-button-bg);color:var(--db-danger-button-text);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.db-danger-button:hover:not(:disabled){background:var(--db-danger-button-hover)}
+.db-danger-button:disabled{opacity:.55;cursor:not-allowed}
+.db-delete-account-modal{justify-items:stretch;text-align:left}
+.db-delete-account-modal h2{padding-right:24px}
+.db-delete-confirmation{display:grid;gap:6px;color:var(--db-text);font-size:11px;font-weight:700}
+.db-delete-confirmation input{height:38px;box-sizing:border-box;border:1px solid var(--db-border);border-radius:8px;padding:9px 10px;background:var(--db-bg);color:var(--db-text);font:inherit}
+.db-delete-account-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.db-delete-account-actions .db-secondary-button{width:auto}
+.texos-dashboard[data-theme="dark"] .db-delete-account-modal .db-settings-alert.error{background:#4b2526;color:#ffb4ad}
 @media(max-width:600px){.db-settings-form{grid-template-columns:1fr}.db-settings-card{padding:16px}.db-settings-restaurant{flex-direction:column}.db-avatar-upload-row{align-items:flex-start}.db-settings-restaurant-actions{width:100%}.db-settings-restaurant-actions .db-secondary-button{width:auto}.db-access-link-row{align-items:stretch;flex-direction:column}.db-access-link-row button{width:100%}.db-access-link-row input{width:100%}}
+
+/* Light Theme (default) */
+.db-kitchen-code-modal.db-delete-account-modal .danger {
+  color: #b42318;
+  background: #fff1f0;
+  border: 1px solid #f5d2cf;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+
+/* Dark Theme */
+.texos-dashboard[data-theme="dark"] .db-kitchen-code-modal.db-delete-account-modal .danger {
+  color: #ffb4ad;
+  background: #2a161b;
+  border-color: #703e43;
+}

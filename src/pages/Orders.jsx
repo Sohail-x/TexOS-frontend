@@ -36,6 +36,31 @@ function getErrorMessage(error, fallback) {
   return error?.message || fallback;
 }
 
+function formatLocalDateTimeParam(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function getOrderDateBounds(dateFilter, fromDate, toDate) {
+  if (dateFilter === "ALL") return { start: null, end: null };
+  if (dateFilter === "CUSTOM") {
+    const start = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
+    const end = toDate ? new Date(`${toDate}T00:00:00`) : null;
+    if (end) end.setDate(end.getDate() + 1);
+    return { start, end };
+  }
+
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  if (dateFilter === "7") start.setDate(start.getDate() - 6);
+  if (dateFilter === "15") start.setDate(start.getDate() - 14);
+  if (dateFilter === "30") start.setMonth(start.getMonth() - 1);
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+}
+
 export default function Orders() {
   const restaurantId = useActiveRestaurantId();
   const [orders, setOrders] = useState([]);
@@ -52,6 +77,7 @@ export default function Orders() {
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const ordersRequestRef = useRef(null);
   const ordersLoadedRef = useRef(false);
+  const loadedRestaurantIdRef = useRef("");
   const liveConnectedRef = useRef(false);
 
   const loadOrders = useCallback(async ({ quiet = false } = {}) => {
@@ -63,8 +89,12 @@ export default function Orders() {
     setError("");
 
     try {
+      const { start, end } = getOrderDateBounds(dateFilter, fromDate, toDate);
+      const query = new URLSearchParams({ page: "0", size: "100" });
+      if (start) query.set("from", formatLocalDateTimeParam(start));
+      if (end) query.set("to", formatLocalDateTimeParam(end));
       const response = await apiFetch(
-        `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders?page=0&size=100`,
+        `${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders?${query}`,
         { headers: { Accept: "application/json" }, signal: controller.signal }
       );
 
@@ -95,7 +125,7 @@ export default function Orders() {
         }
       }
     }
-  }, [restaurantId]);
+  }, [dateFilter, fromDate, restaurantId, toDate]);
 
   useLiveUpdates({
     enabled: Boolean(restaurantId),
@@ -124,9 +154,13 @@ export default function Orders() {
         setOrders([]);
         setSelectedOrder(null);
         setLoading(false);
+        loadedRestaurantIdRef.current = "";
         return;
       }
-      loadOrders();
+      const quiet = ordersLoadedRef.current
+        && loadedRestaurantIdRef.current === restaurantId;
+      loadedRestaurantIdRef.current = restaurantId;
+      loadOrders({ quiet });
     });
     return () => {
       active = false;

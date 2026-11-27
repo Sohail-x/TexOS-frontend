@@ -16,6 +16,13 @@ export default function ClientDataPage() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
   const today = useMemo(() => new Date(), []);
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("texos-theme") || "light";
+    } catch {
+      return "light";
+    }
+  });
   const [range, setRange] = useState("today");
   const [fromDate, setFromDate] = useState(isoDate(today));
   const [toDate, setToDate] = useState(isoDate(today));
@@ -64,11 +71,45 @@ export default function ClientDataPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  return <main className="client-data-page">
+  useEffect(() => {
+    const previousTheme = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = theme;
+    document.body.dataset.theme = theme;
+    document.documentElement.style.background =
+      theme === "dark" ? "#10202b" : "#f4f8fa";
+    document.body.style.background =
+      theme === "dark" ? "#10202b" : "#f4f8fa";
+    return () => {
+      document.documentElement.style.background = "";
+      document.body.style.background = "";
+      if (previousTheme) {
+        document.documentElement.dataset.theme = previousTheme;
+        document.body.dataset.theme = previousTheme;
+      } else {
+        delete document.documentElement.dataset.theme;
+        delete document.body.dataset.theme;
+      }
+    };
+  }, [theme]);
+
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    try {
+      localStorage.setItem("texos-theme", nextTheme);
+    } catch (storageError) {
+      console.error("Could not persist the admin theme preference.", storageError);
+    }
+  }
+
+  return <main className="client-data-page" data-theme={theme}>
     <header className="client-data-header">
       <button type="button" className="client-data-back" onClick={() => navigate("/texos-admin")}>← Admin dashboard</button>
       <div><p className="client-data-eyebrow">TEXOS ADMIN · CLIENT ANALYTICS</p><h1>{data?.restaurantName || "Client Data"}</h1><p>Restaurant customer and order performance</p></div>
-      <button type="button" className="client-data-refresh" onClick={loadData} disabled={loading}>{loading ? "Loading…" : "↻ Refresh"}</button>
+      <div className="client-data-header-actions">
+        <button type="button" className="client-data-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>{theme === "dark" ? "☀" : "☾"}</button>
+        <button type="button" className="client-data-refresh" onClick={loadData} disabled={loading}>{loading ? "Loading…" : "↻ Refresh"}</button>
+      </div>
     </header>
 
     <section className="client-data-filter">

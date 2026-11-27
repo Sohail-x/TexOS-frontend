@@ -86,6 +86,16 @@ export function clearAuthSession() {
   }
 }
 
+export function clearAllTexosData() {
+  clearAuthSession();
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith("texos-") || key?.startsWith("texos_")) {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
 export function rememberPlanId(planId) {
   if (planId) localStorage.setItem("texos-pending-plan-id", String(planId));
   else localStorage.removeItem("texos-pending-plan-id");

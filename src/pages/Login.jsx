@@ -77,6 +77,12 @@ export default function Login() {
             </div>
             <div className="forgot-password"><Link to="/forgot-password">Forgot password?</Link></div>
             {error && <p role="alert" style={{ color: "#ef6464", marginTop: 12 }}>{error}</p>}
+            <p className="auth-policy-notice">
+              By logging in, you agree to our{" "}
+              <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</Link>
+              {" "}and{" "}
+              <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+            </p>
             <button type="submit" className="button auth-submit" disabled={loading}>{loading ? "Signing in..." : "Login to Account"}</button>
           </form>
           {import.meta.env.VITE_GOOGLE_CLIENT_ID && <>

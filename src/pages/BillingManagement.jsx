@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { API_BASE, apiFetch, requireRestaurantId, shortOrderId, useActiveRestaurantId } from "./restaurantApi";
 import "./BillingManagement.css";
@@ -31,6 +31,33 @@ function parseDateInput(value) {
   if (!value) return null;
   const [year, month, day] = value.split("-").map(Number);
   return Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day) ? new Date(year, month - 1, day) : null;
+}
+function formatLocalDateTimeParam(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+function getBillingDateBounds(dateFilter, customStartDate, customEndDate) {
+  if (dateFilter === "ALL") return { start: null, end: null };
+  const today = startOfLocalDay(new Date());
+  if (dateFilter === "CUSTOM") {
+    const start = parseDateInput(customStartDate);
+    const end = parseDateInput(customEndDate);
+    if (end) end.setDate(end.getDate() + 1);
+    return { start, end };
+  }
+  if (dateFilter === "LAST_MONTH") {
+    return {
+      start: new Date(today.getFullYear(), today.getMonth() - 1, 1),
+      end: new Date(today.getFullYear(), today.getMonth(), 1),
+    };
+  }
+
+  const start = new Date(today);
+  if (dateFilter === "LAST_7_DAYS") start.setDate(start.getDate() - 6);
+  if (dateFilter === "LAST_15_DAYS") start.setDate(start.getDate() - 14);
+  const end = new Date(today);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
 }
 
 export default function BillingManagement() {
@@ -68,25 +95,50 @@ export default function BillingManagement() {
   });
   const [phonePeLoading, setPhonePeLoading] = useState(true);
   const [paymentHistory, setPaymentHistory] = useState([]);
-  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
+  const paymentHistoryLoadedRef = useRef(false);
+  const paymentHistoryRequestRef = useRef(null);
+  const paymentHistoryRestaurantIdRef = useRef("");
+  const ordersRequestRef = useRef(null);
+  const ordersLoadedRef = useRef(false);
+  const loadedRestaurantIdRef = useRef("");
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [receiptPaperSize, setReceiptPaperSize] = useState("80mm");
   const [billPaperSize, setBillPaperSize] = useState("80mm");
   const [billPaperSizes, setBillPaperSizes] = useState({});
 
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
+  const loadOrders = useCallback(async ({ quiet = false } = {}) => {
+    if (!restaurantId) return;
+    ordersRequestRef.current?.abort();
+    const controller = new AbortController();
+    ordersRequestRef.current = controller;
+    if (!quiet) setLoading(true);
     setError("");
     try {
-      const response = await apiFetch(`${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders?page=0&size=100`, { headers: { Accept: "application/json" } });
+      const { start, end } = getBillingDateBounds(dateFilter, customStartDate, customEndDate);
+      const query = new URLSearchParams({ page: "0", size: "100" });
+      if (start) query.set("from", formatLocalDateTimeParam(start));
+      if (end) query.set("to", formatLocalDateTimeParam(end));
+      const response = await apiFetch(`${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/orders?${query}`, {
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
       if (!response.ok) throw new Error(`Could not load orders (HTTP ${response.status}).`);
-      setOrders(listFrom(await response.json()));
+      const orderList = listFrom(await response.json());
+      if (controller.signal.aborted) return;
+      setOrders(orderList);
+      ordersLoadedRef.current = true;
     } catch (err) {
-      setError(err.message || "Could not load billing records.");
+      if (!controller.signal.aborted) {
+        setError(err.message || "Could not load billing records.");
+      }
     } finally {
-      setLoading(false);
+      if (ordersRequestRef.current === controller) {
+        ordersRequestRef.current = null;
+        if (!controller.signal.aborted && !quiet) setLoading(false);
+      }
     }
-  }, [restaurantId]);
+  }, [customEndDate, customStartDate, dateFilter, restaurantId]);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -132,42 +184,76 @@ export default function BillingManagement() {
   }, [restaurantId]);
 
   const loadPaymentHistory = useCallback(async () => {
-    if (!restaurantId) return;
+    if (!restaurantId || paymentHistoryRequestRef.current) return;
+    const controller = new AbortController();
+    paymentHistoryRequestRef.current = controller;
     setPaymentHistoryLoading(true);
     try {
       const response = await apiFetch(`${API_BASE}/api/restaurants/${requireRestaurantId(restaurantId)}/payments`, {
         headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error(`Could not load payment history (HTTP ${response.status}).`);
-      setPaymentHistory(listFrom(await response.json()));
+      const history = listFrom(await response.json());
+      if (controller.signal.aborted) return;
+      setPaymentHistory(history);
+      paymentHistoryLoadedRef.current = true;
     } catch (err) {
-      setError(err.message || "Could not load payment history.");
+      if (!controller.signal.aborted) {
+        paymentHistoryLoadedRef.current = false;
+        setError(err.message || "Could not load payment history.");
+      }
     } finally {
-      setPaymentHistoryLoading(false);
+      if (paymentHistoryRequestRef.current === controller) {
+        paymentHistoryRequestRef.current = null;
+        if (!controller.signal.aborted) setPaymentHistoryLoading(false);
+      }
     }
   }, [restaurantId]);
 
   useEffect(() => {
-    let active = true;
-    Promise.resolve().then(() => {
-      if (!active) return;
-      if (!restaurantId) {
-        setOrders([]);
-        setLoading(false);
-        setSettingsLoading(false);
-        setPhonePeLoading(false);
-        setPaymentHistoryLoading(false);
-        return;
-      }
-      loadOrders();
-      loadSettings();
-      loadPhonePeSettings();
-      loadPaymentHistory();
-    });
+    if (!restaurantId) {
+      setOrders([]);
+      setLoading(false);
+      ordersLoadedRef.current = false;
+      loadedRestaurantIdRef.current = "";
+      return;
+    }
+    const quiet = ordersLoadedRef.current && loadedRestaurantIdRef.current === restaurantId;
+    loadedRestaurantIdRef.current = restaurantId;
+    loadOrders({ quiet });
     return () => {
-      active = false;
+      ordersRequestRef.current?.abort();
+      ordersRequestRef.current = null;
     };
-  }, [loadOrders, loadPaymentHistory, loadPhonePeSettings, loadSettings, restaurantId]);
+  }, [loadOrders, restaurantId]);
+
+  useEffect(() => {
+    if (!restaurantId) {
+      setSettingsLoading(false);
+      setPhonePeLoading(false);
+      return;
+    }
+    loadSettings();
+    loadPhonePeSettings();
+  }, [loadPhonePeSettings, loadSettings, restaurantId]);
+
+  useEffect(() => {
+    if (paymentHistoryRestaurantIdRef.current !== restaurantId) {
+      paymentHistoryRequestRef.current?.abort();
+      paymentHistoryRequestRef.current = null;
+      paymentHistoryRestaurantIdRef.current = restaurantId;
+      paymentHistoryLoadedRef.current = false;
+      setPaymentHistory([]);
+      setPaymentHistoryLoading(false);
+    }
+    if (!restaurantId) {
+      return;
+    }
+    if (activeView === "payments" && !paymentHistoryLoadedRef.current) {
+      loadPaymentHistory();
+    }
+  }, [activeView, loadPaymentHistory, restaurantId]);
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     const q = search.trim().toLowerCase();
@@ -227,7 +313,8 @@ export default function BillingManagement() {
         throw new Error(body || `Could not record offline collection (HTTP ${response.status}).`);
       }
       setNotice(`${method === "CASH" ? "Cash" : "Offline UPI"} payment recorded for the complete sitting bill.`);
-      await Promise.all([loadOrders(), loadPaymentHistory()]);
+      paymentHistoryLoadedRef.current = false;
+      await Promise.all([loadOrders(), activeView === "payments" ? loadPaymentHistory() : Promise.resolve()]);
     } catch (err) {
       setError(err.message || "Could not record offline collection.");
     } finally {

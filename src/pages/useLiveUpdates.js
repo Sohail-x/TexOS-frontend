@@ -26,7 +26,20 @@ export function useLiveUpdates({
     if (!enabled || !token || !topicKey) return undefined;
 
     let active = true;
+    let connected = false;
     let fallbackTimers = [];
+    const pendingFallbacks = new Set();
+    const runFallback = (index) => {
+      if (!active
+        || connected
+        || document.visibilityState === "hidden"
+        || pendingFallbacks.has(index)) return;
+      const result = fallbacksRef.current[index]?.callback?.();
+      if (result && typeof result.then === "function") {
+        pendingFallbacks.add(index);
+        void Promise.resolve(result).finally(() => pendingFallbacks.delete(index));
+      }
+    };
     const stopFallbacks = () => {
       fallbackTimers.forEach((timer) => window.clearInterval(timer));
       fallbackTimers = [];
@@ -34,13 +47,19 @@ export function useLiveUpdates({
     const startFallbacks = () => {
       if (!active || fallbackTimers.length > 0) return;
       fallbackTimers = fallbacksRef.current.map((fallback, index) => {
-        fallback.callback?.();
+        runFallback(index);
         return window.setInterval(
-          () => fallbacksRef.current[index]?.callback?.(),
+          () => runFallback(index),
           fallback.intervalMs,
         );
       });
     };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible" && !connected) {
+        fallbacksRef.current.forEach((_, index) => runFallback(index));
+      }
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     const client = new Client({
       brokerURL: `${API_BASE.replace(/^http/, "ws")}/ws`,
@@ -51,6 +70,7 @@ export function useLiveUpdates({
       heartbeatOutgoing: 10000,
       onConnect: () => {
         if (!active) return;
+        connected = true;
         stopFallbacks();
         subscriptionsRef.current.forEach(({ destination }) => {
           client.subscribe(destination, (message) => {
@@ -69,9 +89,18 @@ export function useLiveUpdates({
         });
         onConnectedRef.current?.();
       },
-      onWebSocketClose: startFallbacks,
-      onWebSocketError: startFallbacks,
-      onStompError: startFallbacks,
+      onWebSocketClose: () => {
+        connected = false;
+        startFallbacks();
+      },
+      onWebSocketError: () => {
+        connected = false;
+        startFallbacks();
+      },
+      onStompError: () => {
+        connected = false;
+        startFallbacks();
+      },
     });
 
     client.activate();
@@ -79,6 +108,7 @@ export function useLiveUpdates({
     return () => {
       active = false;
       stopFallbacks();
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       void client.deactivate();
     };
   }, [enabled, fallbackKey, token, topicKey]);

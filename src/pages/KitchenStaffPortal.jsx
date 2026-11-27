@@ -24,6 +24,13 @@ async function staffRequest(path, token, options = {}) {
 
 export default function KitchenStaffPortal() {
   const [token, setToken] = useState(() => sessionStorage.getItem(SESSION_KEY) || "");
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("texos-theme") || "light";
+    } catch {
+      return "light";
+    }
+  });
   const [restaurant, setRestaurant] = useState(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
@@ -99,13 +106,30 @@ export default function KitchenStaffPortal() {
     setError("Your kitchen access has been revoked. Enter a new access code to continue.");
   }, []);
 
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    localStorage.setItem("texos-theme", nextTheme);
+  }
+
   if (loading) {
-    return <main className="kitchen-staff-access"><div className="kitchen-staff-card"><p>Checking kitchen access…</p></div></main>;
+    return <main className="kitchen-staff-access" data-theme={theme}><div className="kitchen-staff-card"><p>Checking kitchen access…</p></div></main>;
   }
 
   if (token && restaurant?.restaurantId) {
-    return <div className="kitchen-staff-workspace">
-      <div className="kitchen-staff-restaurant">{restaurant.restaurantName}</div>
+    return <div className="kitchen-staff-workspace" data-theme={theme}>
+      <div className="kitchen-staff-restaurant">
+        <span>{restaurant.restaurantName}</span>
+        <button
+          type="button"
+          className="kitchen-staff-theme-toggle"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          onClick={toggleTheme}
+        >
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
+      </div>
       <KitchenDisplay
         staffMode
         staffToken={token}
@@ -117,7 +141,16 @@ export default function KitchenStaffPortal() {
     </div>;
   }
 
-  return <main className="kitchen-staff-access">
+  return <main className="kitchen-staff-access" data-theme={theme}>
+    <button
+      type="button"
+      className="kitchen-staff-theme-toggle kitchen-staff-access-theme-toggle"
+      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      onClick={toggleTheme}
+    >
+      {theme === "dark" ? "☀" : "☾"}
+    </button>
     <form className="kitchen-staff-card" onSubmit={verify}>
       <span className="kitchen-staff-brand">T</span>
       <p className="kitchen-staff-eyebrow">TEXOS KITCHEN</p>
