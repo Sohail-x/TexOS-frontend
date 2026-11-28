@@ -518,6 +518,7 @@ useEffect(() => {
             {orderApprovalSettings.pageUrl
               ? <div className="db-access-link-row"><input readOnly aria-label="Order approval page URL" value={orderApprovalSettings.pageUrl} /><button type="button" className="db-secondary-button" onClick={() => copyLink(orderApprovalSettings.pageUrl, "Order approval link")}>Copy Link</button></div>
               : <p>Approval link is unavailable.</p>}
+              <span>Active Staff Count : <strong>{orderApprovalSettings.activeStaffCount ?? 0}</strong></span>
             <div className="db-settings-actions">
               <button type="button" className="db-primary-button" disabled={orderApprovalLoading || !orderApprovalSettings.pageUrl} onClick={generateOrderApprovalCode}>
                 {orderApprovalLoading ? "Please wait…" : "Generate Code"}
@@ -539,6 +540,7 @@ useEffect(() => {
           </label>
           {kitchenAccessExpanded && <>
             <div className="db-kitchen-access-summary">
+              <span>Active Staff Count : <strong>{kitchenAccessStatus?.activeStaffCount ?? 0}</strong></span>
               <span>Current access: <strong>{kitchenAccessStatus?.status || "Not generated"}</strong></span>
               {kitchenAccessStatus?.sessionActive && <span>Kitchen staff session is active</span>}
               {kitchenAccessStatus?.expiresAt && kitchenAccessStatus.status === "ACTIVE" && (
@@ -549,10 +551,8 @@ useEffect(() => {
               <a href="/kitchen-staff" target="_blank" rel="noreferrer">Open Kitchen Staff Portal ↗</a>
             </div>
             <div className="db-settings-actions">
-              <button type="button" className="db-primary-button" disabled={kitchenAccessLoading || (
-                kitchenAccessStatus?.status === "ACTIVE"
-                || (kitchenAccessStatus?.status === "USED" && kitchenAccessStatus.sessionActive)
-              )} onClick={generateKitchenAccessCode}>
+
+              <button type="button" className="db-primary-button" disabled={kitchenAccessLoading} onClick={generateKitchenAccessCode}>
                 {kitchenAccessLoading ? "Please wait…" : "Generate Code"}
               </button>
               {(kitchenAccessStatus?.status === "ACTIVE" || kitchenAccessStatus?.sessionActive) && (
