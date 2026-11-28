@@ -325,7 +325,7 @@ export default function Orders() {
                       <div className="orders-item-summary">
                         {(order.items || []).slice(0, 2).map((item, index) => (
                           <span key={`${item.itemId || item.itemName}-${index}`}>{item.itemName} × {item.quantity}
-                            {item.customization && <small className="orders-item-customization">Request: {item.customization}</small>}
+                            {item.customization && <small className="orders-item-customization">( Request: {item.customization} )</small>}
                           </span>
                         ))}
                         {(order.items || []).length > 2 && <small>+{order.items.length - 2} more</small>}

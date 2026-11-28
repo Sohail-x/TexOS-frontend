@@ -107,3 +107,95 @@
 .texos-dashboard[data-theme="dark"] .bill-settings-summary{color:#b7cbd3}
 @media(max-width:900px){.bill-settings-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.bill-heading-actions{justify-content:flex-start}.bill-section-tabs{width:100%}.bill-section-tabs button{flex:1}.bill-paper-select{min-width:120px}}
+
+/* Screen & Print: "Request: Extra Spicy" ko item ke neeche alag line mein dikhane ke liye */
+.bill-item-customization {
+  display: block;       /* Item name se chipakne ke bajaye new line mein aayega */
+  margin-top: 2px;
+  font-size: 9.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+@media print {
+  /* 80mm thermal paper: Item, Qty, aur Amount teeno ka font size barabar (10px) karega */
+  body[data-texos-print="80mm"] .bill-receipt-print-area .bill-receipt-items th,
+  body[data-texos-print="80mm"] .bill-receipt-print-area .bill-receipt-items td {
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  /* 58mm chhota thermal paper: Chhota aur readable font (8.5px) */
+  body[data-texos-print="58mm"] .bill-receipt-print-area .bill-receipt-items th,
+  body[data-texos-print="58mm"] .bill-receipt-print-area .bill-receipt-items td {
+    font-size: 8.5px !important;
+    line-height: 1.3 !important;
+  }
+
+  /* A4 paper print: Normal size (11px) */
+  body[data-texos-print="A4"] .bill-receipt-print-area .bill-receipt-items th,
+  body[data-texos-print="A4"] .bill-receipt-print-area .bill-receipt-items td {
+    font-size: 11px !important;
+  }
+
+  /* Print mein customization note ko thoda chhota aur light color mein dikhayega */
+  body[data-texos-print] .bill-receipt-print-area .bill-item-customization {
+    font-size: 11.5px !important;
+    margin-top: -8px;
+    color: #526174 !important;
+  }
+
+  /* Column 1 (Item): 52% width dega taaki dish ka naam kam lines mein aaye */
+  body[data-texos-print] .bill-receipt-items th:nth-child(1),
+  body[data-texos-print] .bill-receipt-items td:nth-child(1) {
+    width: 52% !important;
+    font-size: 14.5px !important;
+  }
+
+  /* Column 2 (Qty): 16% width, center align, aur ek hi line mein rakhega */
+  body[data-texos-print] .bill-receipt-items th:nth-child(2),
+  body[data-texos-print] .bill-receipt-items td:nth-child(2) {
+    width: 16% !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    font-size: 14.5px !important;
+  }
+
+  /* Column 3 (Amount): 32% width, right align, aur ₹19,701.00 ko 2 lines mein tootne se rokega */
+  body[data-texos-print] .bill-receipt-items th:nth-child(3),
+  body[data-texos-print] .bill-receipt-items td:nth-child(3) {
+    width: 32% !important;
+    text-align: right !important;
+    white-space: nowrap !important;
+    font-size: 14.5px !important;
+  }
+
+  /* Header ka extra gap kam karega taaki receipt 2 pages par na jaye */
+  body[data-texos-print] .bill-receipt-head {
+    padding: 4px 0 10px !important;
+  }
+
+  /* Paid, Customer, Order/Bill, Table rows ka padding kam karega */
+  body[data-texos-print] .bill-receipt-meta {
+    padding: 5px 0 !important;
+    font-size: 10px !important;
+    gap: 8px !important;
+  }
+
+  /* Left label ("Order / Bill") ko 2 line mein tootne se rokega */
+  body[data-texos-print] .bill-receipt-meta span {
+    white-space: nowrap !important;
+  }
+
+  /* Payment method aur Reference rows ko compact karega */
+  body[data-texos-print] .bill-receipt-totals p {
+    padding: 4px 0 !important;
+    font-size: 10px !important;
+  }
+
+  /* "Total paid" ko thoda bold aur 12px rakhega */
+  body[data-texos-print] .bill-receipt-totals .bill-grand-total {
+    font-size: 12px !important;
+    padding-top: 8px !important;
+  }
+}

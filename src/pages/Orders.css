@@ -49,7 +49,7 @@
 .orders-detail-line div { display:flex; flex-direction:column; gap:5px; }
 .orders-detail-line div span { color:#718096; font-size:11px; }
 .orders-detail-line strong { color:#17324a; }
-.orders-item-customization { display:block; margin-top:4px; color:#a85a1a!important; font-size:10px!important; white-space:pre-wrap; overflow-wrap:anywhere; }
+.orders-item-customization { display:block; margin-top:-12px; color:#a85a1a!important; font-size:10px!important; white-space:pre-wrap; overflow-wrap:anywhere; }
 .orders-detail-total { display:flex; justify-content:space-between; padding:15px 0; border-bottom:1px solid #e5edf1; color:#536b80; font-size:13px; }
 .orders-detail-total strong { color:#102a43; font-size:17px; }
 .orders-detail-meta { display:flex; justify-content:space-between; gap:10px; padding-top:14px; color:#718096; font-size:11px; }

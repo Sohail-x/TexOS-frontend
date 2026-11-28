@@ -630,7 +630,7 @@ function CustomerBillModal({
             <div className="cm-customer-bill-items">
               {(bill.items || []).map((item, index) => (
                 <div className="receipt-row" key={`${item.itemId || item.itemName}-${index}`}>
-                  <span>{item.quantity} × {item.itemName}{item.customization && <small className="cm-bill-customization">Request: {item.customization}</small>}</span>
+                  <span>{item.quantity} × {item.itemName}{item.customization && <small className="cm-bill-customization">( Request: {item.customization} )</small>}</span>
                   <strong>{money(item.lineTotal ?? Number(item.unitPrice || 0) * Number(item.quantity || 0))}</strong>
                 </div>
               ))}

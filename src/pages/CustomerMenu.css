@@ -898,7 +898,7 @@
 .cm-cart-customization,
 .cm-bill-customization {
   display: block;
-  margin-top: 4px;
+  margin-top: -12px;
   color: var(--cm-ink-muted);
   font-size: 10px;
   font-weight: 500;
@@ -2143,7 +2143,6 @@
   color: var(--cm-ink-muted);
   font-size: 11px;
   line-height: 1.45;
-  text-align: right;
 }
 
 .cm-auth-policy-consent + .cm-auth-submit {
